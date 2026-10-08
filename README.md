@@ -1,0 +1,4 @@
+Make app for miquland using miqutoolkit apis.
+You can however make your own apps using pango, cairo etc. targetting the layers of miquland like rofi/waybar etc. But you will end up making another toolkit yourselves in doing so.
+Miqutoolkit, gives you some preconfigured layouts similar to android xml called LinearLayout, GridLayout, RelativeLayout, CardView, TextView, ImageView etc. Layout parameters supports rounding, padding, margin etc. It also allows you to choose between making a App (which is gonna be tiled) or Layer. You can make your own wallpaper provider by just importing miqutoolkit and it's image view. Probably 30 lines of C++ will allow you to make a wallpaper provider. I am a little biased towards Android style naming because by God, Android XML naming conventions are good.
+If you want to read documentation, you look at the include folder which has all the hpp files. The public methods are the onces you are going to use in builders.
