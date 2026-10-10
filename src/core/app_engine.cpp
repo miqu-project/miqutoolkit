@@ -229,14 +229,19 @@ void AppEngine::register_window(std::shared_ptr<Window> win) {
     }
 }
 
-void AppEngine::unregister_window(std::shared_ptr<Window> win) {
-    auto it = std::find(m_windows.begin(), m_windows.end(), win);
+void AppEngine::unregister_window(Window* win) {
+    if (!win) return;
+    auto it = std::find_if(m_windows.begin(), m_windows.end(), [win](const auto& w) { return w.get() == win; });
     if (it != m_windows.end()) {
         m_windows.erase(it);
     }
     if (m_quit_on_last_window && m_windows.empty()) {
         quit(0);
     }
+}
+
+void AppEngine::unregister_window(std::shared_ptr<Window> win) {
+    unregister_window(win ? win.get() : nullptr);
 }
 
 void AppEngine::post(std::function<void()> task) {

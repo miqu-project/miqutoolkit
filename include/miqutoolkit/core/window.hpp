@@ -1,6 +1,7 @@
 #pragma once
 
 #include "miqutoolkit/view/view.hpp"
+#include "miqutoolkit/view/layout_params.hpp"
 #include "miqutoolkit/core/shm_pool.hpp"
 #include "miqutoolkit/core/types.hpp"
 #include <wayland-client.h>
@@ -75,6 +76,11 @@ public:
     void set_output(struct wl_output* output) { m_output = output; }
     struct wl_output* get_output() const { return m_output; }
 
+    void set_content_gravity(Gravity gravity) { m_content_gravity = gravity; }
+    Gravity get_content_gravity() const { return m_content_gravity; }
+    void set_content_margin(const Margin& margin) { m_content_margin = margin; }
+    const Margin& get_content_margin() const { return m_content_margin; }
+
     // Backdrop & Modal options
     void set_dim_backdrop(bool dim) { m_dim_backdrop = dim; }
     bool is_dim_backdrop() const { return m_dim_backdrop; }
@@ -138,12 +144,15 @@ private:
     int m_height = 600;
     int m_content_w = 0;
     int m_content_h = 0;
+    Gravity m_content_gravity = Gravity::Center;
+    Margin m_content_margin{};
     bool m_dim_backdrop = false;
     bool m_close_on_click_outside = false;
     bool m_close_on_escape = false;
     Color m_background_color;
     bool m_has_custom_bg = false;
     bool m_transparent = false;
+    bool m_pointer_inside = false;
 
     bool m_configured = false;
     bool m_needs_redraw = false;
@@ -234,6 +243,16 @@ public:
 
     std::shared_ptr<WindowBuilder> contentSize(int w, int h) {
         m_window->set_content_size(w, h);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<WindowBuilder> contentGravity(Gravity g) {
+        m_window->set_content_gravity(g);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<WindowBuilder> contentMargin(const Margin& m) {
+        m_window->set_content_margin(m);
         return shared_from_this();
     }
 

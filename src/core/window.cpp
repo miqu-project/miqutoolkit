@@ -133,6 +133,8 @@ void Window::update_seat_capabilities(uint32_t caps) {
 const struct wl_pointer_listener Window::s_pointer_listener = {
     .enter = [](void* data, struct wl_pointer*, uint32_t serial, struct wl_surface* surface, wl_fixed_t sx, wl_fixed_t sy) {
         auto* self = static_cast<Window*>(data);
+        if (!self || surface != self->m_surface) return;
+        self->m_pointer_inside = true;
         self->m_last_x = wl_fixed_to_double(sx);
         self->m_last_y = wl_fixed_to_double(sy);
         self->update_cursor(serial);
@@ -144,9 +146,18 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
             self->schedule_redraw();
         }
     },
-    .leave = [](void* data, struct wl_pointer*, uint32_t serial, struct wl_surface* surface) {},
-    .motion = [](void* data, struct wl_pointer*, uint32_t time, wl_fixed_t sx, wl_fixed_t sy) {
+    .leave = [](void* data, struct wl_pointer*, uint32_t, struct wl_surface* surface) {
         auto* self = static_cast<Window*>(data);
+        if (!self || surface != self->m_surface) return;
+        self->m_pointer_inside = false;
+        if (self->m_root_view) {
+            self->m_root_view->on_mouse_move(-999, -999, self->m_allocated_content_bounds);
+            self->schedule_redraw();
+        }
+    },
+    .motion = [](void* data, struct wl_pointer*, uint32_t, wl_fixed_t sx, wl_fixed_t sy) {
+        auto* self = static_cast<Window*>(data);
+        if (!self || !self->m_pointer_inside) return;
         self->m_last_x = wl_fixed_to_double(sx);
         self->m_last_y = wl_fixed_to_double(sy);
         if (self->m_popup_view) {
@@ -161,8 +172,10 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
             }
         }
     },
-    .button = [](void* data, struct wl_pointer*, uint32_t serial, uint32_t time, uint32_t button, uint32_t state) {
+    .button = [](void* data, struct wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
         auto* self = static_cast<Window*>(data);
+        if (!self || !self->m_pointer_inside) return;
+        auto keep_alive = self->shared_from_this();
         MouseButton mb = MouseButton::Left;
         if (button == 0x111) mb = MouseButton::Right;
         else if (button == 0x112) mb = MouseButton::Middle;
@@ -204,8 +217,9 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
             }
         }
     },
-    .axis = [](void* data, struct wl_pointer*, uint32_t time, uint32_t axis, wl_fixed_t value) {
+    .axis = [](void* data, struct wl_pointer*, uint32_t, uint32_t axis, wl_fixed_t value) {
         auto* self = static_cast<Window*>(data);
+        if (!self || !self->m_pointer_inside) return;
         if (axis == WL_POINTER_AXIS_VERTICAL_SCROLL) {
             double delta = wl_fixed_to_double(value);
             if (self->m_popup_view) {
@@ -270,6 +284,8 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
     },
     .leave = [](void* data, struct wl_keyboard*, uint32_t, struct wl_surface*) {
         auto* self = static_cast<Window*>(data);
+        if (!self) return;
+        auto keep_alive = self->shared_from_this();
         if (self->m_has_keyboard_focus) {
             self->m_has_keyboard_focus = false;
             if (self->m_close_on_click_outside) {
@@ -278,9 +294,10 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
             }
         }
     },
-    .key = [](void* data, struct wl_keyboard*, uint32_t serial, uint32_t time, uint32_t key, uint32_t state) {
+    .key = [](void* data, struct wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
         auto* self = static_cast<Window*>(data);
-        if (!self->m_xkb_state) return;
+        if (!self || !self->m_xkb_state) return;
+        auto keep_alive = self->shared_from_this();
 
         uint32_t keycode = key + 8;
         xkb_keysym_t sym = xkb_state_key_get_one_sym(self->m_xkb_state, keycode);
@@ -348,8 +365,10 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
 };
 
 const struct wl_touch_listener Window::s_touch_listener = {
-    .down = [](void* data, struct wl_touch*, uint32_t serial, uint32_t time, struct wl_surface*, int32_t id, wl_fixed_t x, wl_fixed_t y) {
+    .down = [](void* data, struct wl_touch*, uint32_t, uint32_t time, struct wl_surface*, int32_t id, wl_fixed_t x, wl_fixed_t y) {
         auto* self = static_cast<Window*>(data);
+        if (!self) return;
+        auto keep_alive = self->shared_from_this();
         double tx = wl_fixed_to_double(x);
         double ty = wl_fixed_to_double(y);
 
@@ -529,20 +548,10 @@ Window::Window() {
 }
 
 Window::~Window() {
-    if (m_cursor_surface) wl_surface_destroy(m_cursor_surface);
-    if (m_cursor_theme) wl_cursor_theme_destroy(m_cursor_theme);
-    if (m_frame_callback) wl_callback_destroy(m_frame_callback);
-    if (m_xkb_state) xkb_state_unref(m_xkb_state);
-    if (m_xkb_keymap) xkb_keymap_unref(m_xkb_keymap);
-    if (m_xkb_ctx) xkb_context_unref(m_xkb_ctx);
-    if (m_pointer) wl_pointer_destroy(m_pointer);
-    if (m_keyboard) wl_keyboard_destroy(m_keyboard);
-    if (m_touch) wl_touch_destroy(m_touch);
-    if (m_xdg_toplevel) xdg_toplevel_destroy(m_xdg_toplevel);
-    if (m_xdg_surface) xdg_surface_destroy(m_xdg_surface);
-    if (m_layer_surface) zwlr_layer_surface_v1_destroy(m_layer_surface);
-    if (m_session_lock_surface) ext_session_lock_surface_v1_destroy(m_session_lock_surface);
-    if (m_surface) wl_surface_destroy(m_surface);
+    close();
+    if (m_xkb_state) { xkb_state_unref(m_xkb_state); m_xkb_state = nullptr; }
+    if (m_xkb_keymap) { xkb_keymap_unref(m_xkb_keymap); m_xkb_keymap = nullptr; }
+    if (m_xkb_ctx) { xkb_context_unref(m_xkb_ctx); m_xkb_ctx = nullptr; }
 }
 
 
@@ -755,8 +764,25 @@ void Window::render_frame() {
             if (m_content_w > 0 && m_content_h > 0) {
                 int cw = std::min(m_content_w, m_width);
                 int ch = std::min(m_content_h, m_height);
-                int cx = (m_width - cw) / 2;
-                int cy = (m_height - ch) / 2;
+                int cx = 0;
+                int cy = 0;
+
+                if (m_content_gravity & Gravity::Right) {
+                    cx = m_width - cw - m_content_margin.right;
+                } else if (m_content_gravity & Gravity::Left) {
+                    cx = m_content_margin.left;
+                } else {
+                    cx = (m_width - cw) / 2;
+                }
+
+                if (m_content_gravity & Gravity::Bottom) {
+                    cy = m_height - ch - m_content_margin.bottom;
+                } else if (m_content_gravity & Gravity::Top) {
+                    cy = m_content_margin.top;
+                } else {
+                    cy = (m_height - ch) / 2;
+                }
+
                 content_bounds = Rect(cx, cy, cw, ch);
             }
             m_allocated_content_bounds = content_bounds;
@@ -835,10 +861,37 @@ void Window::dismiss_popup() {
 }
 
 void Window::close() {
+    std::shared_ptr<Window> keep_alive;
+    try {
+        keep_alive = shared_from_this();
+    } catch (const std::bad_weak_ptr&) {
+        // Window is currently in destructor or not owned by shared_ptr
+    }
+
     dismiss_popup();
     auto* engine = AppEngine::instance();
     if (engine) {
-        engine->unregister_window(shared_from_this());
+        engine->unregister_window(this);
+    }
+    if (m_pointer) {
+        wl_pointer_destroy(m_pointer);
+        m_pointer = nullptr;
+    }
+    if (m_keyboard) {
+        wl_keyboard_destroy(m_keyboard);
+        m_keyboard = nullptr;
+    }
+    if (m_touch) {
+        wl_touch_destroy(m_touch);
+        m_touch = nullptr;
+    }
+    if (m_cursor_surface) {
+        wl_surface_destroy(m_cursor_surface);
+        m_cursor_surface = nullptr;
+    }
+    if (m_cursor_theme) {
+        wl_cursor_theme_destroy(m_cursor_theme);
+        m_cursor_theme = nullptr;
     }
     if (m_xdg_toplevel) {
         xdg_toplevel_destroy(m_xdg_toplevel);
@@ -865,6 +918,8 @@ void Window::close() {
         m_surface = nullptr;
     }
     m_configured = false;
+    m_pointer_inside = false;
+    m_has_keyboard_focus = false;
     if (engine && engine->get_display()) {
         wl_display_flush(engine->get_display());
     }

@@ -52,6 +52,7 @@ public:
 
     void register_window(std::shared_ptr<Window> win);
     void unregister_window(std::shared_ptr<Window> win);
+    void unregister_window(Window* win);
 
     void set_quit_on_last_window_closed(bool quit) { m_quit_on_last_window = quit; }
     bool get_quit_on_last_window_closed() const { return m_quit_on_last_window; }
