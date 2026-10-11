@@ -3,6 +3,7 @@
 #include "miqutoolkit/core/config.hpp"
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <algorithm>
+#include <cmath>
 
 namespace miqu {
 
@@ -86,7 +87,23 @@ void SearchView::draw(cairo_t* cr, const Rect& bounds) {
 
     if (draw_w <= 0 || draw_h <= 0) return;
 
-    int radius = (m_corner_radius >= 0) ? m_corner_radius : config->metrics.corner_radius;
+    int radius = (m_corner_radius >= 0) ? m_corner_radius : (draw_h / 2);
+
+    // 1b. Ambient drop shadow if elevated
+    if (m_elevation > 0) {
+        cairo_save(cr);
+        for (int i = 1; i <= std::min(m_elevation, 4); ++i) {
+            double shadow_offset = i * 1.5;
+            double shadow_expand = (i - 1) * 0.5;
+            double alpha = 0.04 / std::sqrt(static_cast<double>(i));
+            CardView::draw_rounded_rect(cr, draw_x - shadow_expand, draw_y + shadow_offset,
+                                       draw_w + shadow_expand * 2.0, draw_h,
+                                       radius + shadow_expand);
+            cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, alpha);
+            cairo_fill(cr);
+        }
+        cairo_restore(cr);
+    }
 
     cairo_save(cr);
 
@@ -103,7 +120,7 @@ void SearchView::draw(cairo_t* cr, const Rect& bounds) {
     cairo_fill(cr);
 
     // 3. Focused Outline
-    if (is_focused()) {
+    if (is_focused() && m_focus_border) {
         CardView::draw_rounded_rect(cr, draw_x + 0.5, draw_y + 0.5, draw_w - 1.0, draw_h - 1.0, radius);
         cairo_set_source_rgba(cr, config->colors.primary.r,
                                   config->colors.primary.g,

@@ -43,6 +43,8 @@ public:
     void set_selected_index(int index);
     int get_selected_index() const { return m_selected_index; }
     std::shared_ptr<View> get_selected_item() const;
+    void set_selection_border(bool enable) { m_selection_border = enable; }
+    bool has_selection_border() const { return m_selection_border; }
 
     // Event listener
     void set_on_item_click_listener(std::function<void(size_t index, std::shared_ptr<View> item)> cb) {
@@ -83,6 +85,7 @@ private:
     mutable int m_effective_cols = 5;
     mutable int m_effective_cell_w = 100;
 
+    bool m_selection_border = true;
     std::vector<std::shared_ptr<View>> m_items;
     size_t m_virtual_count = 0;
     ItemProviderCallback m_item_provider;
@@ -135,6 +138,11 @@ public:
 
     std::shared_ptr<GridViewBuilder> items(std::vector<std::shared_ptr<View>> items) {
         m_view->set_items(std::move(items));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<GridViewBuilder> selectionBorder(bool enable) {
+        m_view->set_selection_border(enable);
         return shared_from_this();
     }
 

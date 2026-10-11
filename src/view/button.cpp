@@ -36,12 +36,13 @@ Size Button::measure_size() const {
     cairo_destroy(cr);
     cairo_surface_destroy(temp_surf);
 
-    int icon_space = m_icon.empty() ? 0 : (font_size > 0 ? font_size + 12 : 24);
+    int icon_s = m_icon_size > 0 ? m_icon_size : (font_size > 0 ? font_size + 4 : 20);
+    int icon_space = m_icon.empty() ? 0 : (icon_s + 8);
     int pad_h = m_padding.left + m_padding.right > 0 ? (m_padding.left + m_padding.right) : 24;
     int pad_v = m_padding.top + m_padding.bottom > 0 ? (m_padding.top + m_padding.bottom) : 12;
 
     int total_w = text_w + icon_space + pad_h;
-    int total_h = std::max(text_h, 20) + pad_v;
+    int total_h = std::max(std::max(text_h, icon_s), 20) + pad_v;
 
     return Size(total_w, total_h);
 }
@@ -133,6 +134,27 @@ void Button::draw(cairo_t* cr, const Rect& bounds) {
         }
     }
 
+    if (m_has_custom_bg && !m_hovered && !m_pressed) {
+        bg_color = m_custom_bg;
+    }
+    if (m_has_custom_text_color && !m_hovered && !m_pressed) {
+        fg_color = m_custom_fg;
+    }
+    if (m_has_custom_border_color) {
+        if (m_hovered) {
+            border_color = m_custom_border_color.with_alpha(std::min(1.0f, m_custom_border_color.a + 0.25f));
+        } else if (!m_pressed) {
+            border_color = m_custom_border_color;
+        }
+        if (border_width <= 0.0 && m_border_width < 0.0) {
+            border_width = 1.0;
+        }
+    }
+
+    if (m_border_width >= 0.0) {
+        border_width = m_border_width;
+    }
+
     int radius = (m_corner_radius >= 0) ? m_corner_radius : config->metrics.corner_radius;
 
     cairo_save(cr);
@@ -152,13 +174,13 @@ void Button::draw(cairo_t* cr, const Rect& bounds) {
         cairo_stroke(cr);
     }
 
-    int pad_l = m_padding.left > 0 ? m_padding.left : 12;
-    int pad_r = m_padding.right > 0 ? m_padding.right : 12;
+    int pad_l = (m_padding.left >= 0) ? m_padding.left : 12;
+    int pad_r = (m_padding.right >= 0) ? m_padding.right : 12;
     int avail_content_w = std::max(0, draw_w - pad_l - pad_r);
 
     int font_size = m_font_size > 0 ? m_font_size : config->metrics.font_size;
     if (font_size <= 0) font_size = 11;
-    int icon_size = font_size + 4;
+    int icon_size = m_icon_size > 0 ? m_icon_size : (font_size + 4);
     int icon_w = m_icon.empty() ? 0 : icon_size;
     int gap = (!m_icon.empty() && !m_text.empty()) ? 8 : 0;
 
@@ -194,7 +216,15 @@ void Button::draw(cairo_t* cr, const Rect& bounds) {
     }
 
     int total_content_w = icon_w + gap + text_w;
-    int content_start_x = draw_x + pad_l + std::max(0, (avail_content_w - total_content_w) / 2);
+    int content_start_x;
+    if (m_content_gravity & Gravity::Left) {
+        content_start_x = draw_x + pad_l;
+    } else if (m_content_gravity & Gravity::Right) {
+        content_start_x = draw_x + draw_w - pad_r - total_content_w;
+    } else {
+        content_start_x = m_text.empty() ? (draw_x + (draw_w - icon_w) / 2)
+                                         : (draw_x + pad_l + std::max(0, (avail_content_w - total_content_w) / 2));
+    }
 
     if (!m_icon.empty()) {
         int icon_x = content_start_x;

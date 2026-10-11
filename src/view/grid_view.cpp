@@ -194,13 +194,15 @@ void GridView::draw(cairo_t* cr, const Rect& bounds) {
                                       0.6f);
             cairo_fill(cr);
 
-            CardView::draw_rounded_rect(cr, cell_x + 0.5, cell_y + 0.5, cell_w - 1.0, m_cell_h - 1.0, cell_radius);
-            cairo_set_source_rgba(cr, config->colors.primary.r,
-                                      config->colors.primary.g,
-                                      config->colors.primary.b,
-                                      0.8f);
-            cairo_set_line_width(cr, 1.0);
-            cairo_stroke(cr);
+            if (m_selection_border) {
+                CardView::draw_rounded_rect(cr, cell_x + 0.5, cell_y + 0.5, cell_w - 1.0, m_cell_h - 1.0, cell_radius);
+                cairo_set_source_rgba(cr, config->colors.primary.r,
+                                          config->colors.primary.g,
+                                          config->colors.primary.b,
+                                          0.8f);
+                cairo_set_line_width(cr, 1.0);
+                cairo_stroke(cr);
+            }
         } else if (is_hovered) {
             CardView::draw_rounded_rect(cr, cell_x, cell_y, cell_w, m_cell_h, cell_radius);
             cairo_set_source_rgba(cr, config->colors.surface_variant.r,

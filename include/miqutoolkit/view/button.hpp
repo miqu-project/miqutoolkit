@@ -34,10 +34,36 @@ public:
     void set_outlined(bool outlined = true) { m_style = outlined ? ButtonStyle::Outlined : ButtonStyle::Standard; }
     void set_flat(bool flat = true) { m_style = flat ? ButtonStyle::Flat : ButtonStyle::Standard; }
 
+    void set_icon_size(int size) { m_icon_size = size; }
+    int get_icon_size() const { return m_icon_size; }
+
+    void set_content_gravity(Gravity gravity) { m_content_gravity = gravity; }
+    Gravity get_content_gravity() const { return m_content_gravity; }
+
+    void set_border_width(double width) { m_border_width = width; }
+    double get_border_width() const { return m_border_width; }
+    void set_bordered(bool bordered) { m_border_width = bordered ? -1.0 : 0.0; }
+    bool is_bordered() const { return m_border_width != 0.0; }
+
     void set_custom_colors(const Color& bg, const Color& fg) {
         m_custom_bg = bg;
         m_custom_fg = fg;
         m_use_custom_colors = true;
+    }
+
+    void set_text_color(const Color& color) {
+        m_custom_fg = color;
+        m_has_custom_text_color = true;
+    }
+
+    void set_background_color(const Color& color) {
+        m_custom_bg = color;
+        m_has_custom_bg = true;
+    }
+
+    void set_border_color(const Color& color) {
+        m_custom_border_color = color;
+        m_has_custom_border_color = true;
     }
 
     void set_selected(bool sel) { m_selected = sel; }
@@ -52,6 +78,7 @@ public:
 private:
     std::string m_text;
     std::string m_icon;
+    int m_icon_size = -1;
     std::string m_font_family = "";
     int m_font_size = -1;
     bool m_font_bold = false;
@@ -63,8 +90,15 @@ private:
     bool m_selected = false;
 
     bool m_use_custom_colors = false;
+    bool m_has_custom_text_color = false;
+    bool m_has_custom_bg = false;
+    bool m_has_custom_border_color = false;
     Color m_custom_bg;
     Color m_custom_fg;
+    Color m_custom_border_color;
+
+    Gravity m_content_gravity = Gravity::Center;
+    double m_border_width = -1.0;
 };
 
 class ButtonBuilder : public std::enable_shared_from_this<ButtonBuilder> {
@@ -82,6 +116,11 @@ public:
 
     std::shared_ptr<ButtonBuilder> icon(std::string icon) {
         m_view->set_icon(std::move(icon));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> iconSize(int size) {
+        m_view->set_icon_size(size);
         return shared_from_this();
     }
 
@@ -127,6 +166,36 @@ public:
 
     std::shared_ptr<ButtonBuilder> customColors(const Color& bg, const Color& fg) {
         m_view->set_custom_colors(bg, fg);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> textColor(const Color& fg) {
+        m_view->set_text_color(fg);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> backgroundColor(const Color& bg) {
+        m_view->set_background_color(bg);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> borderColor(const Color& col) {
+        m_view->set_border_color(col);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> contentGravity(Gravity g) {
+        m_view->set_content_gravity(g);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> borderWidth(double w) {
+        m_view->set_border_width(w);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> bordered(bool b) {
+        m_view->set_bordered(b);
         return shared_from_this();
     }
 
