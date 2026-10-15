@@ -1,5 +1,6 @@
 #include "miqutoolkit/view/popup_window.hpp"
 #include "miqutoolkit/view/frame_layout.hpp"
+#include "miqutoolkit/view/card_view.hpp"
 #include "miqutoolkit/core/window.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include <algorithm>
@@ -22,7 +23,7 @@ public:
         ));
     }
 
-    void set_elevation_level(int elev) { m_elev = elev; }
+    void set_elevation_level(double elev) { m_elev = elev; }
     void set_border_style(double width, const Color& col) {
         m_border_w = width;
         m_border_col = col;
@@ -42,21 +43,9 @@ public:
         Color stroke_col = (m_border_col.a > 0.0f) ? m_border_col : config->colors.outline_variant;
         double stroke_w = (m_border_w >= 0.0) ? m_border_w : 1.0;
 
-        // 1. Multi-pass ambient alpha drop shadow
-        if (m_elev > 0) {
-            cairo_save(cr);
-            int steps = std::min(m_elev, 5);
-            for (int i = 1; i <= steps; ++i) {
-                double shadow_offset = i * 1.6;
-                double shadow_expand = (i - 1) * 0.75;
-                double alpha = 0.045 / std::sqrt(static_cast<double>(i));
-                draw_rounded_rect(cr, bounds.x - shadow_expand, bounds.y + shadow_offset,
-                                  bounds.width + shadow_expand * 2.0, bounds.height,
-                                  radius + shadow_expand);
-                cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, alpha);
-                cairo_fill(cr);
-            }
-            cairo_restore(cr);
+        // 1. Ambient drop shadow if elevated
+        if (m_elev > 0.0) {
+            CardView::draw_elevation_shadow(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius, m_elev);
         }
 
         // 2. Background fill
@@ -95,7 +84,7 @@ public:
     }
 
 private:
-    int m_elev = 4;
+    double m_elev = 4.0;
     int m_radius_override = -1;
     double m_border_w = 1.0;
     Color m_border_col;
@@ -135,8 +124,8 @@ void PopupWindow::set_size(int width, int height) {
     m_height = height;
 }
 
-void PopupWindow::set_elevation(int elevation) {
-    m_elevation = std::max(0, elevation);
+void PopupWindow::set_elevation(double elevation) {
+    m_elevation = std::max(0.0, elevation);
     if (m_container_view) {
         if (auto* c = dynamic_cast<PopupContainerView*>(m_container_view.get())) {
             c->set_elevation_level(m_elevation);
@@ -547,7 +536,7 @@ std::shared_ptr<PopupWindowBuilder> PopupWindowBuilder::maxHeight(int max_h) {
     return shared_from_this();
 }
 
-std::shared_ptr<PopupWindowBuilder> PopupWindowBuilder::elevation(int elev) {
+std::shared_ptr<PopupWindowBuilder> PopupWindowBuilder::elevation(double elev) {
     m_popup->set_elevation(elev);
     return shared_from_this();
 }

@@ -61,8 +61,8 @@ public:
     int get_max_height() const { return m_max_height; }
 
     // Styling & Appearance
-    void set_elevation(int elevation);
-    int get_elevation() const { return m_elevation; }
+    void set_elevation(double elevation);
+    double get_elevation() const { return m_elevation; }
 
     void set_corner_radius(int radius);
     int get_corner_radius() const { return m_corner_radius; }
@@ -143,7 +143,7 @@ private:
     int m_max_width = 0;
     int m_max_height = 0;
 
-    int m_elevation = 4;
+    double m_elevation = 4.0;
     int m_corner_radius = -1; // -1 denotes default from theme metrics
     Color m_bg_color;
     bool m_has_bg_color = false;
@@ -179,7 +179,7 @@ public:
     std::shared_ptr<PopupWindowBuilder> maxWidth(int max_w);
     std::shared_ptr<PopupWindowBuilder> maxHeight(int max_h);
 
-    std::shared_ptr<PopupWindowBuilder> elevation(int elev);
+    std::shared_ptr<PopupWindowBuilder> elevation(double elev);
     std::shared_ptr<PopupWindowBuilder> cornerRadius(int radius);
     std::shared_ptr<PopupWindowBuilder> backgroundColor(const Color& color);
     std::shared_ptr<PopupWindowBuilder> border(double stroke_width, const Color& stroke_color);

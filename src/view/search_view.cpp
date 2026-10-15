@@ -90,19 +90,8 @@ void SearchView::draw(cairo_t* cr, const Rect& bounds) {
     int radius = (m_corner_radius >= 0) ? m_corner_radius : (draw_h / 2);
 
     // 1b. Ambient drop shadow if elevated
-    if (m_elevation > 0) {
-        cairo_save(cr);
-        for (int i = 1; i <= std::min(m_elevation, 4); ++i) {
-            double shadow_offset = i * 1.5;
-            double shadow_expand = (i - 1) * 0.5;
-            double alpha = 0.04 / std::sqrt(static_cast<double>(i));
-            CardView::draw_rounded_rect(cr, draw_x - shadow_expand, draw_y + shadow_offset,
-                                       draw_w + shadow_expand * 2.0, draw_h,
-                                       radius + shadow_expand);
-            cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, alpha);
-            cairo_fill(cr);
-        }
-        cairo_restore(cr);
+    if (m_elevation > 0.0) {
+        CardView::draw_elevation_shadow(cr, draw_x, draw_y, draw_w, draw_h, radius, m_elevation);
     }
 
     cairo_save(cr);

@@ -31,8 +31,8 @@ public:
     void set_radius(int radius) { m_corner_radius = radius; }
     int get_radius() const { return m_corner_radius; }
 
-    void set_elevation(int elevation) { m_elevation = std::max(0, elevation); }
-    int get_elevation() const { return m_elevation; }
+    void set_elevation(double elevation) { m_elevation = std::max(0.0, elevation); }
+    double get_elevation() const { return m_elevation; }
 
     void set_background_color(const Color& bg) { m_bg_color = bg; m_has_custom_bg = true; }
     void set_stroke(int width, const Color& stroke) { m_stroke_width = width; m_stroke_color = stroke; }
@@ -57,7 +57,7 @@ private:
 
     bool m_focus_border = true;
     int m_corner_radius = -1;
-    int m_elevation = 0;
+    double m_elevation = 0.0;
     int m_stroke_width = 0;
     Color m_stroke_color = Color::transparent();
     Color m_bg_color;
@@ -105,7 +105,7 @@ public:
         return shared_from_this();
     }
 
-    std::shared_ptr<SearchViewBuilder> elevation(int elev) {
+    std::shared_ptr<SearchViewBuilder> elevation(double elev) {
         m_view->set_elevation(elev);
         return shared_from_this();
     }

@@ -193,8 +193,13 @@ configure_file(
     @ONLY
 )
 
+# CLI Diagnostics & Management Tool
+add_executable(miqutoolkit-cli src/tools/miqutoolkit_cli.cpp)
+target_link_libraries(miqutoolkit-cli PRIVATE miqutoolkit)
+
 # Installation Rules
-install(TARGETS miqutoolkit
+install(TARGETS miqutoolkit miqutoolkit-cli
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
@@ -207,6 +212,6 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/miqutoolkit.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
 
-install(FILES assets/miqutoolkit.conf
+install(FILES assets/miqutoolkit.conf assets/miqutoolkit.conf.template
     DESTINATION ${CMAKE_INSTALL_DATADIR}/miqutoolkit
 )

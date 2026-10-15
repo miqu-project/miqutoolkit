@@ -1,0 +1,46 @@
+# ==============================================================================
+# miqutoolkit User Configuration Template
+# Unified styling, typography, metrics, and appearance overrides for Miqu apps
+#
+# Location: ~/.config/miqutoolkit/miqutoolkit.conf
+# ==============================================================================
+
+# ==============================================================================
+# Section 1: Typography & Metrics (Active User Preferences)
+# ==============================================================================
+font = Sans
+font_size = 11
+h1_size = 20
+h2_size = 15
+h3_size = 13
+caption_size = 10
+icon_theme = papirus
+corner_radius = 12
+border_width = 1
+# Card ambient shadow elevation (floating-point supported, e.g. 0.5, 1.0, 2.0; 0 to disable)
+card_elevation = 1.0
+
+# ==============================================================================
+# Section 2: Custom Color Overrides (Optional)
+#
+# By default, colors are dynamically managed by miqutheme:
+#   ~/.config/miqutheme/current/miqutoolkit.conf
+# Or fallback to the system root defaults:
+#   /usr/share/miqutoolkit/miqutoolkit.conf
+#
+# Uncomment any setting below ONLY if you wish to lock a specific color
+# and override miqutheme dynamic themes.
+# ==============================================================================
+# background = #fff7fc80
+# on_background = #201923
+# surface = #fff7fc80
+# on_surface = #000000
+# surface_variant = #ebdfed
+# on_surface_variant = #312a35
+# primary = #540081
+# on_primary = #ffffff
+# primary_container = #9b00ea
+# on_primary_container = #ffffff
+# outline = #d8ccd9
+# outline_variant = #e4d7e5
+# backdrop = #00000080

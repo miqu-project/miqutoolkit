@@ -37,6 +37,7 @@ public:
         int h2_size = 15;
         int h3_size = 13;
         int caption_size = 10;
+        double card_elevation = 2.0;
     } metrics;
 
     static std::shared_ptr<Config> get();

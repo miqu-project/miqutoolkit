@@ -13,6 +13,47 @@ void CardView::draw_rounded_rect(cairo_t* cr, double x, double y, double w, doub
     ViewGroup::draw_rounded_rect(cr, x, y, w, h, r);
 }
 
+void CardView::draw_elevation_shadow(cairo_t* cr, double x, double y, double w, double h, double radius, double elevation) {
+    if (!cr || elevation <= 0.0 || w <= 0.0 || h <= 0.0) return;
+
+    cairo_save(cr);
+
+    // Number of diffusion steps scales smoothly with elevation
+    int steps = std::clamp(static_cast<int>(std::ceil(elevation * 3.0)), 2, 14);
+
+    // Total shadow alpha scales smoothly from 0.0 upwards with no artificial hard floor
+    double total_alpha = std::clamp(0.12 * std::sqrt(elevation) + 0.05 * elevation, 0.0, 0.45);
+    double step_alpha = total_alpha / static_cast<double>(steps);
+
+    double max_spread = elevation * 2.2;
+    double max_offset = elevation * 1.0;
+
+    // Use EVEN_ODD fill rule so the shadow ONLY renders outside the bounds,
+    // keeping the interior completely untouched and preventing dark color corruption
+    cairo_set_fill_rule(cr, CAIRO_FILL_RULE_EVEN_ODD);
+
+    for (int i = 1; i <= steps; ++i) {
+        double progress = static_cast<double>(i) / steps;
+        double spread = progress * max_spread;
+        double offset_y = progress * max_offset;
+        double spread_top = spread * 0.5;
+        double spread_bottom = spread * 1.5 + offset_y;
+
+        double ox = x - spread;
+        double oy = y - spread_top;
+        double ow = w + spread * 2.0;
+        double oh = h + spread_top + spread_bottom;
+
+        cairo_new_path(cr);
+        draw_rounded_rect(cr, ox, oy, ow, oh, radius + spread);
+        draw_rounded_rect(cr, x, y, w, h, radius);
+        cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, step_alpha);
+        cairo_fill(cr);
+    }
+
+    cairo_restore(cr);
+}
+
 void CardView::draw(cairo_t* cr, const Rect& bounds) {
     if (!is_visible() || !cr || bounds.width <= 0 || bounds.height <= 0) return;
 
@@ -32,23 +73,12 @@ void CardView::draw(cairo_t* cr, const Rect& bounds) {
     }
 
     // 1. Draw subtle ambient drop shadow if elevated
-    int elev = m_elevation;
-    if (m_style == CardStyle::Elevated && elev == 0) {
-        elev = 2; // Default subtle elevation
+    double elev = (m_elevation < 0.0) ? config->metrics.card_elevation : m_elevation;
+    if (m_style == CardStyle::Elevated && elev <= 0.0) {
+        elev = 2.0; // Default subtle elevation
     }
-    if (elev > 0) {
-        cairo_save(cr);
-        for (int i = 1; i <= std::min(elev, 4); ++i) {
-            double shadow_offset = i * 1.5;
-            double shadow_expand = (i - 1) * 0.5;
-            double alpha = 0.035 / std::sqrt(static_cast<double>(i));
-            draw_rounded_rect(cr, bounds.x - shadow_expand, bounds.y + shadow_offset,
-                              bounds.width + shadow_expand * 2.0, bounds.height,
-                              radius + shadow_expand);
-            cairo_set_source_rgba(cr, 0.0, 0.0, 0.0, alpha);
-            cairo_fill(cr);
-        }
-        cairo_restore(cr);
+    if (elev > 0.0) {
+        draw_elevation_shadow(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius, elev);
     }
 
     // 2. Configure outline if Outlined style or explicitly stroked

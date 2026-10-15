@@ -223,6 +223,8 @@ static void load_config_file_internal(const std::string& path, Config::Colors& c
             try { metrics.corner_radius = std::stoi(val); } catch (...) {}
         } else if (key == "window_border_width" || key == "border_width" || key == "border_size") {
             try { metrics.border_width = std::stoi(val); } catch (...) {}
+        } else if (key == "card_elevation" || key == "elevation") {
+            try { metrics.card_elevation = std::stod(val); } catch (...) {}
         }
     }
 }
@@ -252,40 +254,58 @@ void Config::init_toolkit_defaults() {
     colors = Colors{};
     metrics = Metrics{};
 
-    std::string user_cfg_dir = FsUtils::get_user_config_dir("miqutoolkit");
-    std::string user_cfg_file = user_cfg_dir.empty() ? "" : (user_cfg_dir + "/miqutoolkit.conf");
+    // 1. Authoritative Root Defaults (Dead End Authority) - always loaded first
+    const std::vector<std::string> root_candidates = {
+        "/usr/share/miqutoolkit/miqutoolkit.conf",
+        "/etc/xdg/miqutoolkit/miqutoolkit.conf",
+        "/etc/miqutoolkit/miqutoolkit.conf",
+        "/usr/local/share/miqutoolkit/miqutoolkit.conf",
+        "assets/miqutoolkit.conf",
+        "../assets/miqutoolkit.conf"
+    };
 
-    bool loaded_defaults = false;
-
-    // Tier 2: Check if user config exists
-    if (!user_cfg_file.empty() && fs::exists(user_cfg_file)) {
-        std::string exp = expand_path(user_cfg_file);
-        load_config_file_internal(exp, colors, metrics, m_loaded_files, 0);
-        loaded_defaults = true;
+    for (const auto& root_file : root_candidates) {
+        if (fs::exists(root_file)) {
+            std::string exp = expand_path(root_file);
+            load_config_file_internal(exp, colors, metrics, m_loaded_files, 0);
+            break;
+        }
     }
 
-    if (!loaded_defaults) {
-        // Tier 3: Safe root fallback (Dead End Authority)
-        const std::vector<std::string> root_candidates = {
-            "/usr/share/miqutoolkit/miqutoolkit.conf",
-            "/etc/xdg/miqutoolkit/miqutoolkit.conf",
-            "/etc/miqutoolkit/miqutoolkit.conf",
-            "/usr/local/share/miqutoolkit/miqutoolkit.conf",
-            "assets/miqutoolkit.conf",
-            "../assets/miqutoolkit.conf"
-        };
-
-        for (const auto& root_file : root_candidates) {
-            if (fs::exists(root_file)) {
-                std::string exp = expand_path(root_file);
-                load_config_file_internal(exp, colors, metrics, m_loaded_files, 0);
-                loaded_defaults = true;
-                break;
+    // 2. Active Theme Palette from miqutheme (~/.config/miqutheme/current/miqutoolkit.conf)
+    std::string theme_dir = FsUtils::get_user_config_dir("miqutheme");
+    if (!theme_dir.empty()) {
+        std::string theme_conf = theme_dir + "/current/miqutoolkit.conf";
+        if (fs::exists(theme_conf)) {
+            load_config_file_internal(expand_path(theme_conf), colors, metrics, m_loaded_files, 0);
+        } else {
+            // Track path so inotify watches directory for creation
+            std::string abs_theme;
+            try { abs_theme = fs::absolute(theme_conf).string(); } catch (...) { abs_theme = theme_conf; }
+            if (std::find(m_loaded_files.begin(), m_loaded_files.end(), abs_theme) == m_loaded_files.end()) {
+                m_loaded_files.push_back(abs_theme);
             }
         }
     }
 
-    // Re-apply app-specific config file on top of defaults if one was registered
+    // 3. User Global Customizations (~/.config/miqutoolkit/miqutoolkit.conf)
+    std::string user_cfg_dir = FsUtils::get_user_config_dir("miqutoolkit");
+    std::string user_cfg_file = user_cfg_dir.empty() ? "" : (user_cfg_dir + "/miqutoolkit.conf");
+    if (!user_cfg_file.empty()) {
+        if (fs::exists(user_cfg_file)) {
+            std::string exp = expand_path(user_cfg_file);
+            load_config_file_internal(exp, colors, metrics, m_loaded_files, 0);
+        } else {
+            // Track path so inotify watches directory for creation
+            std::string abs_user;
+            try { abs_user = fs::absolute(user_cfg_file).string(); } catch (...) { abs_user = user_cfg_file; }
+            if (std::find(m_loaded_files.begin(), m_loaded_files.end(), abs_user) == m_loaded_files.end()) {
+                m_loaded_files.push_back(abs_user);
+            }
+        }
+    }
+
+    // 4. Re-apply app-specific config file on top of defaults if one was registered
     if (!m_app_config_file.empty() && fs::exists(m_app_config_file)) {
         load_config_file_internal(m_app_config_file, colors, metrics, m_loaded_files, 0);
     }
@@ -328,11 +348,14 @@ std::string Config::init_user_config(
         }
 
         std::vector<std::string> candidates = {
+            "/usr/share/" + app_name + "/" + fname + ".template",
             "/usr/share/" + app_name + "/" + fname,
             "/etc/xdg/" + app_name + "/" + fname,
             "/etc/" + app_name + "/" + fname,
             "/usr/local/share/" + app_name + "/" + fname,
+            "assets/" + fname + ".template",
             "assets/" + fname,
+            "../assets/" + fname + ".template",
             "../assets/" + fname
         };
 

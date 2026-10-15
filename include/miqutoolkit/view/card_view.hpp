@@ -15,7 +15,7 @@ public:
     CardView() {
         m_corner_radius = -1; // -1 denotes default from theme metrics
         m_style = CardStyle::Filled;
-        m_elevation = 0;
+        m_elevation = -1.0;   // -1.0 denotes default from theme metrics
     }
 
     void set_card_background_color(const Color& color) { set_background_color(color); }
@@ -37,8 +37,8 @@ public:
     }
     bool is_bordered() const { return m_style == CardStyle::Outlined || m_stroke_width > 0; }
 
-    void set_elevation(int elevation) { m_elevation = elevation; }
-    int get_elevation() const { return m_elevation; }
+    void set_elevation(double elevation) { m_elevation = elevation; }
+    double get_elevation() const { return m_elevation; }
 
     void draw(cairo_t* cr, const Rect& bounds) override;
 
@@ -54,10 +54,14 @@ public:
     }
 
     static void draw_rounded_rect(cairo_t* cr, double x, double y, double w, double h, double r);
+    static void draw_elevation_shadow(cairo_t* cr, double x, double y, double w, double h, double radius, double elevation);
+    static void draw_elevation_shadow(cairo_t* cr, const Rect& bounds, double radius, double elevation) {
+        draw_elevation_shadow(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius, elevation);
+    }
 
 private:
     CardStyle m_style = CardStyle::Filled;
-    int m_elevation = 0;
+    double m_elevation = -1.0;
 };
 
 class CardViewBuilder : public std::enable_shared_from_this<CardViewBuilder> {
@@ -88,7 +92,7 @@ public:
         return shared_from_this();
     }
 
-    std::shared_ptr<CardViewBuilder> elevation(int elev) {
+    std::shared_ptr<CardViewBuilder> elevation(double elev) {
         m_view->set_elevation(elev);
         return shared_from_this();
     }

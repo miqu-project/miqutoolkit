@@ -581,7 +581,10 @@ bool Window::init() {
             update_seat_capabilities(engine->get_seat_capabilities());
         }
 
-        wl_display_roundtrip(engine->get_display());
+        if (wl_display_roundtrip(engine->get_display()) < 0) {
+            std::cerr << "[miqutoolkit] Failed roundtrip after session lock surface commit." << std::endl;
+            return false;
+        }
 
         engine->register_window(shared_from_this());
         return true;
@@ -609,7 +612,10 @@ bool Window::init() {
         }
 
         wl_surface_commit(m_surface);
-        wl_display_roundtrip(engine->get_display());
+        if (wl_display_roundtrip(engine->get_display()) < 0) {
+            std::cerr << "[miqutoolkit] Failed roundtrip after toplevel surface commit." << std::endl;
+            return false;
+        }
 
         engine->register_window(shared_from_this());
         return true;
@@ -646,9 +652,9 @@ bool Window::init() {
         update_seat_capabilities(engine->get_seat_capabilities());
     }
 
-    if (m_content_w > 0 && m_content_h > 0 && m_anchors == 0) {
-        m_width = m_content_w;
-        m_height = m_content_h;
+    if (m_content_w > 0 && m_content_h > 0) {
+        if (m_width <= 0) m_width = m_content_w;
+        if (m_height <= 0) m_height = m_content_h;
     }
 
     bool stretch_x = (m_anchors & ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
@@ -663,12 +669,24 @@ bool Window::init() {
     zwlr_layer_surface_v1_set_anchor(m_layer_surface, m_anchors);
     zwlr_layer_surface_v1_set_exclusive_zone(m_layer_surface, m_exclusive_zone);
 
+    if (m_content_margin.top > 0 || m_content_margin.right > 0 ||
+        m_content_margin.bottom > 0 || m_content_margin.left > 0) {
+        zwlr_layer_surface_v1_set_margin(m_layer_surface,
+            m_content_margin.top,
+            m_content_margin.right,
+            m_content_margin.bottom,
+            m_content_margin.left);
+    }
+
     if (m_kb_interactive) {
         zwlr_layer_surface_v1_set_keyboard_interactivity(m_layer_surface, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE);
     }
 
     wl_surface_commit(m_surface);
-    wl_display_roundtrip(engine->get_display());
+    if (wl_display_roundtrip(engine->get_display()) < 0) {
+        std::cerr << "[miqutoolkit] Failed roundtrip after layer surface commit." << std::endl;
+        return false;
+    }
 
     engine->register_window(shared_from_this());
     return true;
@@ -761,7 +779,7 @@ void Window::render_frame() {
         // 2. Draw Content View
         if (m_root_view && m_root_view->is_visible()) {
             Rect content_bounds(0, 0, m_width, m_height);
-            if (m_content_w > 0 && m_content_h > 0) {
+            if (m_content_w > 0 && m_content_h > 0 && (m_width > m_content_w || m_height > m_content_h)) {
                 int cw = std::min(m_content_w, m_width);
                 int ch = std::min(m_content_h, m_height);
                 int cx = 0;

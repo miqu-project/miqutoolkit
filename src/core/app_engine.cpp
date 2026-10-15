@@ -271,26 +271,41 @@ int AppEngine::enter_loop() {
 
     while (m_running && (!m_quit_on_last_window || !m_windows.empty())) {
         while (wl_display_prepare_read(m_display) != 0) {
-            wl_display_dispatch_pending(m_display);
+            if (wl_display_dispatch_pending(m_display) < 0) {
+                m_running = false;
+                break;
+            }
         }
-        wl_display_flush(m_display);
+        if (!m_running) break;
+
+        if (wl_display_flush(m_display) < 0 && errno != EAGAIN) {
+            wl_display_cancel_read(m_display);
+            break;
+        }
 
         struct pollfd pfd[3];
-        pfd[0].fd = display_fd;
-        pfd[0].events = POLLIN;
-        pfd[0].revents = 0;
+        int nfds = 0;
 
-        pfd[1].fd = m_wakeup_fd;
-        pfd[1].events = POLLIN;
-        pfd[1].revents = 0;
+        pfd[nfds].fd = display_fd;
+        pfd[nfds].events = POLLIN;
+        pfd[nfds].revents = 0;
+        int display_idx = nfds++;
 
-        pfd[2].fd = m_inotify_fd;
-        pfd[2].events = POLLIN;
-        pfd[2].revents = 0;
+        int wakeup_idx = -1;
+        if (m_wakeup_fd >= 0) {
+            pfd[nfds].fd = m_wakeup_fd;
+            pfd[nfds].events = POLLIN;
+            pfd[nfds].revents = 0;
+            wakeup_idx = nfds++;
+        }
 
-        int nfds = 1;
-        if (m_wakeup_fd >= 0) nfds = 2;
-        if (m_inotify_fd >= 0) nfds = 3;
+        int inotify_idx = -1;
+        if (m_inotify_fd >= 0) {
+            pfd[nfds].fd = m_inotify_fd;
+            pfd[nfds].events = POLLIN;
+            pfd[nfds].revents = 0;
+            inotify_idx = nfds++;
+        }
 
         int ret = poll(pfd, nfds, -1);
 
@@ -303,7 +318,12 @@ int AppEngine::enter_loop() {
             break;
         }
 
-        if (pfd[0].revents & POLLIN) {
+        if (pfd[display_idx].revents & (POLLERR | POLLHUP)) {
+            wl_display_cancel_read(m_display);
+            break;
+        }
+
+        if (pfd[display_idx].revents & POLLIN) {
             if (wl_display_read_events(m_display) < 0) {
                 break;
             }
@@ -315,7 +335,11 @@ int AppEngine::enter_loop() {
             break;
         }
 
-        if (m_wakeup_fd >= 0 && (pfd[1].revents & POLLIN)) {
+        if (wl_display_get_error(m_display) != 0) {
+            break;
+        }
+
+        if (wakeup_idx >= 0 && (pfd[wakeup_idx].revents & POLLIN)) {
             uint64_t val = 0;
             ssize_t s = read(m_wakeup_fd, &val, sizeof(val));
             (void)s;
@@ -330,10 +354,16 @@ int AppEngine::enter_loop() {
             }
         }
 
-        if (m_inotify_fd >= 0 && (pfd[2].revents & POLLIN)) {
+        if (inotify_idx >= 0 && (pfd[inotify_idx].revents & POLLIN)) {
             handle_inotify_events();
         }
     }
+
+    if (wl_display_get_error(m_display) != 0) {
+        std::cerr << "[miqutoolkit] Wayland display disconnected or encountered fatal error." << std::endl;
+        if (m_exit_code == 0) m_exit_code = 1;
+    }
+
     return m_exit_code;
 }
 
