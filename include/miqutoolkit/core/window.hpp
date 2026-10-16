@@ -78,8 +78,9 @@ public:
     const Margin& get_content_margin() const { return m_content_margin; }
 
     // Backdrop & Modal options
-    void set_dim_backdrop(bool dim) { m_dim_backdrop = dim; }
-    bool is_dim_backdrop() const { return m_dim_backdrop; }
+    [[deprecated("dim_backdrop is no longer supported; overlays are native compact surfaces")]]
+    void set_dim_backdrop([[maybe_unused]] bool dim) {}
+    bool is_dim_backdrop() const { return false; }
     void set_close_on_click_outside(bool close) { m_close_on_click_outside = close; }
     bool is_close_on_click_outside() const { return m_close_on_click_outside; }
     void set_close_on_escape(bool close) { m_close_on_escape = close; }
@@ -147,7 +148,6 @@ private:
     int m_content_h = 0;
     Gravity m_content_gravity = Gravity::Center;
     Margin m_content_margin{};
-    bool m_dim_backdrop = false;
     bool m_close_on_click_outside = false;
     bool m_close_on_escape = false;
     Color m_background_color;
@@ -259,8 +259,8 @@ public:
         return shared_from_this();
     }
 
-    std::shared_ptr<WindowBuilder> dimBackdrop(bool dim = true) {
-        m_window->set_dim_backdrop(dim);
+    [[deprecated("dim_backdrop is no longer supported; overlays are native compact surfaces")]]
+    std::shared_ptr<WindowBuilder> dimBackdrop([[maybe_unused]] bool dim = true) {
         return shared_from_this();
     }
 

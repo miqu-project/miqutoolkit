@@ -684,7 +684,10 @@ bool Window::init() {
     }
 
     if (m_kb_interactive) {
-        zwlr_layer_surface_v1_set_keyboard_interactivity(m_layer_surface, ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE);
+        uint32_t kb_mode = m_close_on_click_outside
+            ? ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_ON_DEMAND
+            : ZWLR_LAYER_SURFACE_V1_KEYBOARD_INTERACTIVITY_EXCLUSIVE;
+        zwlr_layer_surface_v1_set_keyboard_interactivity(m_layer_surface, kb_mode);
     }
 
     wl_surface_commit(m_surface);
@@ -768,16 +771,6 @@ void Window::render_frame() {
                 cairo_rectangle(buf->cr, 0, 0, m_width, m_height);
                 cairo_fill(buf->cr);
                 cairo_restore(buf->cr);
-            } else if (m_dim_backdrop) {
-                auto config = Config::get();
-                cairo_save(buf->cr);
-                cairo_set_source_rgba(buf->cr, config->colors.backdrop.r,
-                                              config->colors.backdrop.g,
-                                              config->colors.backdrop.b,
-                                              config->colors.backdrop.a);
-                cairo_rectangle(buf->cr, 0, 0, m_width, m_height);
-                cairo_fill(buf->cr);
-                cairo_restore(buf->cr);
             }
         }
 
@@ -793,7 +786,7 @@ void Window::render_frame() {
                 // When a layer surface uses an explicit compact size (e.g. flyouts),
                 // m_content_margin was already passed to zwlr_layer_surface_v1_set_margin
                 // for compositor-level positioning. Do not subtract it again internally.
-                bool has_layer_margin = (m_role != WindowRole::Toplevel && !m_dim_backdrop);
+                bool has_layer_margin = (m_role != WindowRole::Toplevel);
 
                 if (m_content_gravity & Gravity::Right) {
                     cx = m_width - cw - (has_layer_margin ? 0 : m_content_margin.right);
