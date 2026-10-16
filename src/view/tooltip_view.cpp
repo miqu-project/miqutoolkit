@@ -110,31 +110,24 @@ void TooltipView::draw(cairo_t* cr, const Rect& bounds) {
 
     auto config = Config::get();
     int radius = (m_corner_radius >= 0) ? m_corner_radius : 6;
-    Color bg = (config->colors.surface_variant.a > 0.0f) ? config->colors.surface_variant : config->colors.surface;
-    Color stroke = (config->colors.outline_variant.a > 0.0f) ? config->colors.outline_variant : Color::rgba(1.0f, 1.0f, 1.0f, 0.15f);
+    float opacity = (config->metrics.tooltip_opacity >= 0.0f) ? config->metrics.tooltip_opacity : 0.90f;
+    Color bg = config->colors.surface_variant.with_alpha(opacity);
     Color text_color = (config->colors.on_surface_variant.a > 0.0f) ? config->colors.on_surface_variant : config->colors.on_surface;
 
     // 1. Ambient drop shadow if elevated
-    if (m_elevation > 0.0) {
-        CardView::draw_elevation_shadow(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius, m_elevation);
+    double elev = (m_elevation >= 0.0) ? m_elevation : config->metrics.tooltip_elevation;
+    if (elev > 0.0) {
+        CardView::draw_elevation_shadow(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius, elev);
     }
 
-    // 2. Rounded background fill
+    // 2. Rounded background fill (no outline)
     cairo_save(cr);
     ViewGroup::draw_rounded_rect(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius);
     cairo_set_source_rgba(cr, bg.r, bg.g, bg.b, bg.a);
     cairo_fill(cr);
     cairo_restore(cr);
 
-    // 3. Subtle outline border
-    cairo_save(cr);
-    ViewGroup::draw_rounded_rect(cr, bounds.x + 0.5, bounds.y + 0.5, bounds.width - 1.0, bounds.height - 1.0, std::max(0, radius - 1));
-    cairo_set_source_rgba(cr, stroke.r, stroke.g, stroke.b, stroke.a);
-    cairo_set_line_width(cr, 1.0);
-    cairo_stroke(cr);
-    cairo_restore(cr);
-
-    // 4. Content Typography & Shortcut rendering
+    // 3. Content Typography & Shortcut rendering
     std::string font_family = !config->metrics.font_family.empty() ? config->metrics.font_family : "Sans";
     int font_size = config->metrics.caption_size > 0 ? config->metrics.caption_size : 11;
     std::string desc_str = font_family + " " + std::to_string(font_size);

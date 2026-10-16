@@ -38,6 +38,8 @@ public:
         int h3_size = 13;
         int caption_size = 10;
         double card_elevation = 2.0;
+        float tooltip_opacity = 0.90f;
+        double tooltip_elevation = 1.5;
     } metrics;
 
     static std::shared_ptr<Config> get();

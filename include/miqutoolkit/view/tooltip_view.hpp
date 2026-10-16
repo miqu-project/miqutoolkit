@@ -38,7 +38,7 @@ private:
     std::string m_shortcut;
     Padding m_padding{10, 5, 10, 5};
     int m_corner_radius = 6;
-    double m_elevation = 3.0;
+    double m_elevation = -1.0;
 };
 
 } // namespace miqu

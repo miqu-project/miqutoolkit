@@ -225,6 +225,14 @@ static void load_config_file_internal(const std::string& path, Config::Colors& c
             try { metrics.border_width = std::stoi(val); } catch (...) {}
         } else if (key == "card_elevation" || key == "elevation") {
             try { metrics.card_elevation = std::stod(val); } catch (...) {}
+        } else if (key == "tooltip_opacity") {
+            try {
+                double v = std::stod(val);
+                if (v > 1.0) v /= 100.0;
+                metrics.tooltip_opacity = static_cast<float>(std::clamp(v, 0.0, 1.0));
+            } catch (...) {}
+        } else if (key == "tooltip_elevation") {
+            try { metrics.tooltip_elevation = std::max(0.0, std::stod(val)); } catch (...) {}
         }
     }
 }
