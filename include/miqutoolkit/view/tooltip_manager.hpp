@@ -26,6 +26,7 @@ public:
 
     // Explicit presentation control
     void show_tooltip(Window* window, const std::string& text, const Rect& anchor_bounds);
+    void show_tooltip(Window* window, const std::string& text, const std::string& shortcut, const Rect& anchor_bounds);
     void dismiss();
 
     // Tunables
@@ -41,7 +42,9 @@ private:
     TooltipManager() = default;
 
     void trigger_show();
-    void show_for_layer_window(Window* window, const std::string& text, const Rect& anchor_bounds);
+    bool should_use_in_window_overlay(Window* window) const;
+    void show_in_window(Window* window, const std::string& text, const std::string& shortcut, const Rect& anchor_bounds);
+    void show_for_layer_window(Window* window, const std::string& text, const std::string& shortcut, const Rect& anchor_bounds);
     void show_for_toplevel_window(Window* window, const std::string& text, const Rect& anchor_bounds);
 
     static TooltipManager* s_instance;
@@ -56,6 +59,7 @@ private:
     std::weak_ptr<View> m_hovered_view;
     Rect m_anchor_bounds;
     std::string m_pending_text;
+    std::string m_pending_shortcut;
 
     std::shared_ptr<Window> m_overlay_window;
     std::shared_ptr<TooltipView> m_overlay_tooltip_view;

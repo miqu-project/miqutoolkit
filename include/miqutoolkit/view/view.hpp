@@ -116,6 +116,10 @@ public:
     const std::string& get_tooltip() const { return m_tooltip; }
     bool has_tooltip() const { return !m_tooltip.empty(); }
 
+    void set_tooltip_shortcut(std::string shortcut) { m_tooltip_shortcut = std::move(shortcut); }
+    const std::string& get_tooltip_shortcut() const { return m_tooltip_shortcut; }
+    bool has_tooltip_shortcut() const { return !m_tooltip_shortcut.empty(); }
+
     virtual std::shared_ptr<View> find_view_at(int lx, int ly, Rect* out_bounds = nullptr);
 
 protected:
@@ -127,6 +131,7 @@ protected:
     Window* m_window = nullptr;
     std::function<void()> m_on_click;
     std::string m_tooltip;
+    std::string m_tooltip_shortcut;
 };
 
 } // namespace miqu

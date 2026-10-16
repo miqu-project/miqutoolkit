@@ -14,11 +14,14 @@ namespace miqu {
 class TooltipView : public View {
 public:
     TooltipView();
-    explicit TooltipView(std::string text);
+    explicit TooltipView(std::string text, std::string shortcut = "");
     ~TooltipView() override = default;
 
     void set_text(std::string text);
     const std::string& get_text() const { return m_text; }
+
+    void set_shortcut(std::string shortcut);
+    const std::string& get_shortcut() const { return m_shortcut; }
 
     void set_corner_radius(int radius) { m_corner_radius = radius; }
     int get_corner_radius() const { return m_corner_radius; }
@@ -32,6 +35,7 @@ public:
 
 private:
     std::string m_text;
+    std::string m_shortcut;
     Padding m_padding{10, 5, 10, 5};
     int m_corner_radius = 6;
     double m_elevation = 3.0;

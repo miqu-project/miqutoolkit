@@ -267,5 +267,12 @@ bool ScrollView::on_touch(const TouchEvent& event, const Rect& bounds) {
     return false;
 }
 
+std::shared_ptr<View> ScrollView::find_view_at(int lx, int ly, Rect* out_bounds) {
+    if (!is_visible()) return nullptr;
+    Rect content_rect = get_content_rect(m_bounds);
+    if (!content_rect.contains(Point(lx, ly))) return nullptr;
+    return ViewGroup::find_view_at(lx, ly, out_bounds);
+}
+
 } // namespace miqu
 

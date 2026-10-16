@@ -31,6 +31,8 @@ public:
     bool on_scroll(double delta) override;
     bool on_touch(const TouchEvent& event, const Rect& bounds) override;
 
+    std::shared_ptr<View> find_view_at(int lx, int ly, Rect* out_bounds = nullptr) override;
+
 private:
     std::shared_ptr<View> m_content;
     double m_scroll_y = 0.0;
