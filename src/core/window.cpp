@@ -785,18 +785,23 @@ void Window::render_frame() {
                 int cx = 0;
                 int cy = 0;
 
+                // When a layer surface uses an explicit compact size (e.g. flyouts),
+                // m_content_margin was already passed to zwlr_layer_surface_v1_set_margin
+                // for compositor-level positioning. Do not subtract it again internally.
+                bool has_layer_margin = (m_role != WindowRole::Toplevel && !m_dim_backdrop);
+
                 if (m_content_gravity & Gravity::Right) {
-                    cx = m_width - cw - m_content_margin.right;
+                    cx = m_width - cw - (has_layer_margin ? 0 : m_content_margin.right);
                 } else if (m_content_gravity & Gravity::Left) {
-                    cx = m_content_margin.left;
+                    cx = (has_layer_margin ? 0 : m_content_margin.left);
                 } else {
                     cx = (m_width - cw) / 2;
                 }
 
                 if (m_content_gravity & Gravity::Bottom) {
-                    cy = m_height - ch - m_content_margin.bottom;
+                    cy = m_height - ch - (has_layer_margin ? 0 : m_content_margin.bottom);
                 } else if (m_content_gravity & Gravity::Top) {
-                    cy = m_content_margin.top;
+                    cy = (has_layer_margin ? 0 : m_content_margin.top);
                 } else {
                     cy = (m_height - ch) / 2;
                 }
