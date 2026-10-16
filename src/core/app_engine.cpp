@@ -257,6 +257,34 @@ void AppEngine::post(std::function<void()> task) {
     }
 }
 
+uint64_t AppEngine::post_delayed(int delay_ms, std::function<void()> task) {
+    if (!task) return 0;
+    uint64_t id = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_tasks_mutex);
+        id = m_next_timer_id++;
+        auto trigger = std::chrono::steady_clock::now() + std::chrono::milliseconds(std::max(0, delay_ms));
+        m_delayed_tasks.push_back({ id, trigger, std::move(task) });
+    }
+    if (m_wakeup_fd >= 0) {
+        uint64_t val = 1;
+        ssize_t s = write(m_wakeup_fd, &val, sizeof(val));
+        (void)s;
+    }
+    return id;
+}
+
+void AppEngine::cancel_delayed(uint64_t timer_id) {
+    if (timer_id == 0) return;
+    {
+        std::lock_guard<std::mutex> lock(m_tasks_mutex);
+        auto it = std::find_if(m_delayed_tasks.begin(), m_delayed_tasks.end(), [timer_id](const auto& t) { return t.id == timer_id; });
+        if (it != m_delayed_tasks.end()) {
+            m_delayed_tasks.erase(it);
+        }
+    }
+}
+
 void AppEngine::request_redraw_all() {
     for (auto& win : m_windows) {
         if (win) {
@@ -307,7 +335,21 @@ int AppEngine::enter_loop() {
             inotify_idx = nfds++;
         }
 
-        int ret = poll(pfd, nfds, -1);
+        int timeout_ms = -1;
+        auto now = std::chrono::steady_clock::now();
+        {
+            std::lock_guard<std::mutex> lock(m_tasks_mutex);
+            if (!m_delayed_tasks.empty()) {
+                auto earliest = m_delayed_tasks.front().trigger_time;
+                for (const auto& t : m_delayed_tasks) {
+                    if (t.trigger_time < earliest) earliest = t.trigger_time;
+                }
+                auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(earliest - now).count();
+                timeout_ms = std::max(0, static_cast<int>(diff));
+            }
+        }
+
+        int ret = poll(pfd, nfds, timeout_ms);
 
         if (ret < 0) {
             if (errno == EINTR) {
@@ -352,6 +394,24 @@ int AppEngine::enter_loop() {
             for (auto& t : tasks_to_run) {
                 if (t) t();
             }
+        }
+
+        std::vector<std::function<void()>> expired_tasks;
+        now = std::chrono::steady_clock::now();
+        {
+            std::lock_guard<std::mutex> lock(m_tasks_mutex);
+            auto it = m_delayed_tasks.begin();
+            while (it != m_delayed_tasks.end()) {
+                if (now >= it->trigger_time) {
+                    if (it->task) expired_tasks.push_back(std::move(it->task));
+                    it = m_delayed_tasks.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+        }
+        for (auto& task : expired_tasks) {
+            task();
         }
 
         if (inotify_idx >= 0 && (pfd[inotify_idx].revents & POLLIN)) {

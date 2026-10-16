@@ -43,6 +43,7 @@ public:
     bool on_key(const KeyPressEvent& event) override;
     bool on_scroll(double delta) override;
     bool on_touch(const TouchEvent& event, const Rect& bounds) override;
+    std::shared_ptr<View> find_view_at(int lx, int ly, Rect* out_bounds = nullptr) override;
 
 protected:
     void draw_background(cairo_t* cr, const Rect& bounds) const;

@@ -6,6 +6,7 @@
 #include <functional>
 #include <string>
 #include <mutex>
+#include <chrono>
 
 struct zwlr_layer_shell_v1;
 struct zwlr_foreign_toplevel_manager_v1;
@@ -31,6 +32,8 @@ public:
     void quit(int exit_code = 0);
 
     void post(std::function<void()> task);
+    uint64_t post_delayed(int delay_ms, std::function<void()> task);
+    void cancel_delayed(uint64_t timer_id);
     void request_redraw_all();
 
     struct wl_display* get_display() const { return m_display; }
@@ -103,6 +106,14 @@ private:
     int m_wakeup_fd = -1;
     std::mutex m_tasks_mutex;
     std::vector<std::function<void()>> m_posted_tasks;
+
+    struct DelayedTask {
+        uint64_t id;
+        std::chrono::steady_clock::time_point trigger_time;
+        std::function<void()> task;
+    };
+    std::vector<DelayedTask> m_delayed_tasks;
+    uint64_t m_next_timer_id = 1;
 
     int m_inotify_fd = -1;
     std::vector<std::pair<int, std::string>> m_inotify_watches;

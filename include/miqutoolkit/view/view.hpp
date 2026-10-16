@@ -111,6 +111,13 @@ public:
     void clear_focus();
     bool has_focus() const;
 
+    // Tooltip Support
+    void set_tooltip(std::string text) { m_tooltip = std::move(text); }
+    const std::string& get_tooltip() const { return m_tooltip; }
+    bool has_tooltip() const { return !m_tooltip.empty(); }
+
+    virtual std::shared_ptr<View> find_view_at(int lx, int ly, Rect* out_bounds = nullptr);
+
 protected:
     Rect m_bounds;
     Padding m_padding;
@@ -119,6 +126,7 @@ protected:
     Visibility m_visibility = Visibility::Visible;
     Window* m_window = nullptr;
     std::function<void()> m_on_click;
+    std::string m_tooltip;
 };
 
 } // namespace miqu

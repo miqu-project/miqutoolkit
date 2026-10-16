@@ -1,5 +1,6 @@
 #include "miqutoolkit/core/window.hpp"
 #include "miqutoolkit/view/popup_window.hpp"
+#include "miqutoolkit/view/tooltip_manager.hpp"
 #include "miqutoolkit/core/app_engine.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include "miqutoolkit/system/window_manager.hpp"
@@ -138,6 +139,7 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         self->m_last_x = wl_fixed_to_double(sx);
         self->m_last_y = wl_fixed_to_double(sy);
         self->update_cursor(serial);
+        TooltipManager::get()->on_pointer_motion(self, self->m_last_x, self->m_last_y);
         if (self->m_popup_view) {
             self->m_popup_view->on_mouse_move(self->m_last_x, self->m_last_y, self->m_popup_bounds);
             self->schedule_redraw();
@@ -150,6 +152,7 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         auto* self = static_cast<Window*>(data);
         if (!self || surface != self->m_surface) return;
         self->m_pointer_inside = false;
+        TooltipManager::get()->on_pointer_leave(self);
         if (self->m_root_view) {
             self->m_root_view->on_mouse_move(-999, -999, self->m_allocated_content_bounds);
             self->schedule_redraw();
@@ -160,6 +163,7 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         if (!self || !self->m_pointer_inside) return;
         self->m_last_x = wl_fixed_to_double(sx);
         self->m_last_y = wl_fixed_to_double(sy);
+        TooltipManager::get()->on_pointer_motion(self, self->m_last_x, self->m_last_y);
         if (self->m_popup_view) {
             if (self->m_popup_view->on_mouse_move(self->m_last_x, self->m_last_y, self->m_popup_bounds)) {
                 self->schedule_redraw();
@@ -176,6 +180,7 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         auto* self = static_cast<Window*>(data);
         if (!self || !self->m_pointer_inside) return;
         auto keep_alive = self->shared_from_this();
+        TooltipManager::get()->on_pointer_button(self);
         MouseButton mb = MouseButton::Left;
         if (button == 0x111) mb = MouseButton::Right;
         else if (button == 0x112) mb = MouseButton::Middle;
@@ -653,8 +658,8 @@ bool Window::init() {
     }
 
     if (m_content_w > 0 && m_content_h > 0) {
-        if (m_width <= 0) m_width = m_content_w;
-        if (m_height <= 0) m_height = m_content_h;
+        m_width = m_content_w;
+        m_height = m_content_h;
     }
 
     bool stretch_x = (m_anchors & ZWLR_LAYER_SURFACE_V1_ANCHOR_LEFT) &&
@@ -818,6 +823,11 @@ void Window::render_frame() {
         m_popup_view->draw(buf->cr, m_popup_bounds);
     }
 
+    // 4. Draw Active Tooltip Overlay on top of everything
+    if (m_tooltip_view && m_tooltip_view->is_visible()) {
+        m_tooltip_view->draw(buf->cr, m_tooltip_bounds);
+    }
+
     cairo_surface_flush(buf->cairo_surf);
     buf->busy = true;
 
@@ -883,6 +893,23 @@ void Window::dismiss_popup() {
     }
 }
 
+void Window::show_tooltip_overlay(std::shared_ptr<View> tooltip, const Rect& bounds) {
+    m_tooltip_view = std::move(tooltip);
+    m_tooltip_bounds = bounds;
+    if (m_tooltip_view) {
+        m_tooltip_view->set_window(this);
+        m_tooltip_view->set_bounds(bounds);
+    }
+    schedule_redraw();
+}
+
+void Window::dismiss_tooltip_overlay() {
+    if (m_tooltip_view) {
+        m_tooltip_view = nullptr;
+        schedule_redraw();
+    }
+}
+
 void Window::close() {
     std::shared_ptr<Window> keep_alive;
     try {
@@ -892,6 +919,8 @@ void Window::close() {
     }
 
     dismiss_popup();
+    dismiss_tooltip_overlay();
+    TooltipManager::get()->on_window_destroyed(this);
     auto* engine = AppEngine::instance();
     if (engine) {
         engine->unregister_window(this);

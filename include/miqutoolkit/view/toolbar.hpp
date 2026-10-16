@@ -74,6 +74,17 @@ public:
     void set_on_close(std::function<void()> on_close);
     void set_close_visible(bool visible);
 
+    // --- Buttons & Tooltips ---
+    std::shared_ptr<ImageButton> get_close_button() const { return m_btn_close; }
+    std::shared_ptr<ImageButton> get_back_button() const { return m_btn_back; }
+    std::shared_ptr<ImageButton> get_refresh_button() const { return m_btn_refresh; }
+    std::shared_ptr<ImageButton> get_menu_button() const { return m_btn_menu; }
+
+    void set_close_tooltip(const std::string& tip) { if (m_btn_close) m_btn_close->set_tooltip(tip); }
+    void set_back_tooltip(const std::string& tip) { if (m_btn_back) m_btn_back->set_tooltip(tip); }
+    void set_refresh_tooltip(const std::string& tip) { if (m_btn_refresh) m_btn_refresh->set_tooltip(tip); }
+    void set_menu_tooltip(const std::string& tip) { if (m_btn_menu) m_btn_menu->set_tooltip(tip); }
+
     // --- Appearance ---
     void set_show_divider(bool show) { m_show_divider = show; }
     bool get_show_divider() const { return m_show_divider; }
@@ -192,6 +203,11 @@ public:
 
     std::shared_ptr<ToolbarBuilder> onClose(std::function<void()> on_close) {
         m_toolbar->set_on_close(std::move(on_close));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ToolbarBuilder> closeTooltip(const std::string& tip) {
+        m_toolbar->set_close_tooltip(tip);
         return shared_from_this();
     }
 

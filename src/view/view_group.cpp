@@ -31,6 +31,14 @@ bool View::has_focus() const {
     return m_window && (m_window->get_focused_view() == this);
 }
 
+std::shared_ptr<View> View::find_view_at(int lx, int ly, Rect* out_bounds) {
+    if (!is_visible()) return nullptr;
+    Rect r = (m_bounds.width > 0 && m_bounds.height > 0) ? m_bounds : (out_bounds ? *out_bounds : Rect());
+    if (!r.contains(Point(lx, ly))) return nullptr;
+    if (out_bounds) *out_bounds = r;
+    return shared_from_this();
+}
+
 void ViewGroup::draw_rounded_rect(cairo_t* cr, double x, double y, double w, double h, double r) {
     if (r <= 0.0) {
         cairo_rectangle(cr, x, y, w, h);
@@ -220,6 +228,35 @@ bool ViewGroup::on_touch(const TouchEvent& event, const Rect& bounds) {
     }
 
     return false;
+}
+
+std::shared_ptr<View> ViewGroup::find_view_at(int lx, int ly, Rect* out_bounds) {
+    if (!is_visible()) return nullptr;
+
+    for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
+        if (it->view && it->view->is_visible() && it->allocated_bounds.contains(Point(lx, ly))) {
+            Rect child_bounds = it->allocated_bounds;
+            auto found = it->view->find_view_at(lx, ly, &child_bounds);
+            if (found) {
+                if (found->has_tooltip()) {
+                    if (out_bounds) *out_bounds = child_bounds;
+                    return found;
+                }
+                if (has_tooltip()) {
+                    if (out_bounds) *out_bounds = (m_bounds.width > 0 && m_bounds.height > 0) ? m_bounds : it->allocated_bounds;
+                    return shared_from_this();
+                }
+                if (out_bounds) *out_bounds = child_bounds;
+                return found;
+            }
+        }
+    }
+
+    if (m_bounds.contains(Point(lx, ly))) {
+        if (out_bounds) *out_bounds = m_bounds;
+        return shared_from_this();
+    }
+    return nullptr;
 }
 
 } // namespace miqu

@@ -39,6 +39,7 @@ Toolbar::Toolbar() {
     m_btn_back = std::make_shared<ImageButton>(icons::BACK);
     m_btn_back->set_circle(true);
     m_btn_back->set_icon_size(20);
+    m_btn_back->set_tooltip("Back");
     m_btn_back->set_layout_params(LayoutParams(40, 40, Gravity::CenterVertical));
     m_btn_back->set_on_click_listener([this]() {
         if (m_on_back) m_on_back();
@@ -47,6 +48,7 @@ Toolbar::Toolbar() {
     m_btn_refresh = std::make_shared<ImageButton>(icons::REFRESH);
     m_btn_refresh->set_circle(true);
     m_btn_refresh->set_icon_size(18);
+    m_btn_refresh->set_tooltip("Refresh");
     m_btn_refresh->set_layout_params(LayoutParams(40, 40, Gravity::CenterVertical));
     m_btn_refresh->set_on_click_listener([this]() {
         if (m_on_refresh) m_on_refresh();
@@ -55,6 +57,7 @@ Toolbar::Toolbar() {
     m_btn_menu = std::make_shared<ImageButton>(icons::MENU);
     m_btn_menu->set_circle(true);
     m_btn_menu->set_icon_size(18);
+    m_btn_menu->set_tooltip("Menu");
     m_btn_menu->set_layout_params(LayoutParams(40, 40, Gravity::CenterVertical));
     m_btn_menu->set_on_click_listener([this]() {
         if (m_on_menu) m_on_menu();
@@ -63,6 +66,7 @@ Toolbar::Toolbar() {
     m_btn_close = std::make_shared<ImageButton>(icons::POWER);
     m_btn_close->set_circle(true);
     m_btn_close->set_icon_size(18);
+    m_btn_close->set_tooltip("Close");
     m_btn_close->set_layout_params(LayoutParams(40, 40, Gravity::CenterVertical));
     m_btn_close->set_on_click_listener([this]() {
         if (m_on_close) {
@@ -314,6 +318,7 @@ void Toolbar::draw(cairo_t* cr, const Rect& bounds) {
         int vy = inner_y + (inner_h - h) / 2;
         Rect r(cur_x, vy, w, h);
         m_child_entries.push_back({view, r});
+        view->set_bounds(r);
         view->draw(cr, r);
         cur_x += w + 8; // spacing
     };
@@ -383,6 +388,7 @@ void Toolbar::draw(cairo_t* cr, const Rect& bounds) {
         int vy = inner_y + (inner_h - item.height) / 2;
         Rect r(cur_tx, vy, item.width, item.height);
         m_child_entries.push_back({item.view, r});
+        item.view->set_bounds(r);
         item.view->draw(cr, r);
         cur_tx += item.width + 6;
     }
@@ -409,6 +415,7 @@ void Toolbar::draw(cairo_t* cr, const Rect& bounds) {
             int cy = inner_y + (inner_h - ch) / 2;
             Rect r(cx, cy, cw, ch);
             m_child_entries.push_back({m_center_view, r});
+            m_center_view->set_bounds(r);
             m_center_view->draw(cr, r);
         } else {
             // Title & Subtitle Stack
@@ -443,9 +450,11 @@ void Toolbar::draw(cairo_t* cr, const Rect& bounds) {
                 Rect sub_r(cx, start_y + th + 2, cw, sh);
 
                 m_child_entries.push_back({m_title_view, title_r});
+                m_title_view->set_bounds(title_r);
                 m_title_view->draw(cr, title_r);
 
                 m_child_entries.push_back({m_subtitle_view, sub_r});
+                m_subtitle_view->set_bounds(sub_r);
                 m_subtitle_view->draw(cr, sub_r);
             } else if (has_title) {
                 Size t_sz = m_title_view->measure_size(avail_center_w);
@@ -468,6 +477,7 @@ void Toolbar::draw(cairo_t* cr, const Rect& bounds) {
 
                 Rect title_r(cx, start_y, cw, th);
                 m_child_entries.push_back({m_title_view, title_r});
+                m_title_view->set_bounds(title_r);
                 m_title_view->draw(cr, title_r);
             }
         }

@@ -48,6 +48,7 @@ public:
     std::shared_ptr<View> get_content_view() const { return m_root_view; }
 
     void set_role(WindowRole role) { m_role = role; }
+    WindowRole get_role() const { return m_role; }
     void set_title(std::string title) { m_title = std::move(title); }
     const std::string& get_title() const { return m_title; }
     void set_app_id(std::string app_id) { m_app_id = std::move(app_id); }
@@ -61,18 +62,13 @@ public:
     void set_content_size(int w, int h) {
         m_content_w = w;
         m_content_h = h;
-        if (m_anchors == 0) {
-            m_width = w;
-            m_height = h;
-        }
+        if (w > 0) m_width = w;
+        if (h > 0) m_height = h;
     }
     void set_anchors(uint32_t anchors) {
         m_anchors = anchors;
-        if (m_anchors == 0 && m_content_w > 0 && m_content_h > 0) {
-            m_width = m_content_w;
-            m_height = m_content_h;
-        }
     }
+    uint32_t get_anchors() const { return m_anchors; }
     void set_output(struct wl_output* output) { m_output = output; }
     struct wl_output* get_output() const { return m_output; }
 
@@ -112,6 +108,11 @@ public:
     std::shared_ptr<PopupWindow> get_active_popup() const { return m_active_popup; }
     std::shared_ptr<View> get_popup() const { return m_popup_view; }
     const Rect& get_popup_bounds() const { return m_popup_bounds; }
+
+    // Tooltip overlay support
+    void show_tooltip_overlay(std::shared_ptr<View> tooltip, const Rect& bounds);
+    void dismiss_tooltip_overlay();
+    bool has_tooltip_overlay() const { return m_tooltip_view != nullptr; }
 
     void update_seat_capabilities(uint32_t caps);
 
@@ -190,6 +191,8 @@ private:
     std::shared_ptr<PopupWindow> m_active_popup;
     std::shared_ptr<View> m_popup_view;
     Rect m_popup_bounds;
+    std::shared_ptr<View> m_tooltip_view;
+    Rect m_tooltip_bounds;
 
     std::function<void()> m_on_close;
     std::function<void(const KeyPressEvent&)> m_on_key;

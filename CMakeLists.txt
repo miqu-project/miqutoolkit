@@ -134,6 +134,8 @@ add_library(miqutoolkit SHARED
     src/view/spinner.cpp
     src/view/popup_window.cpp
     src/view/popup_menu.cpp
+    src/view/tooltip_view.cpp
+    src/view/tooltip_manager.cpp
     src/system/window_manager.cpp
     src/system/workspace_manager.cpp
     src/system/output_manager.cpp
