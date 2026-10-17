@@ -258,9 +258,9 @@ void Config::notify_changed() {
 }
 
 void Config::init_toolkit_defaults() {
-    m_loaded_files.clear();
-    colors = Colors{};
-    metrics = Metrics{};
+    Colors staging_colors{};
+    Metrics staging_metrics{};
+    std::vector<std::string> staging_files;
 
     // 1. Authoritative Root Defaults (Dead End Authority) - always loaded first
     const std::vector<std::string> root_candidates = {
@@ -272,12 +272,18 @@ void Config::init_toolkit_defaults() {
         "../assets/miqutoolkit.conf"
     };
 
+    bool root_loaded = false;
     for (const auto& root_file : root_candidates) {
         if (fs::exists(root_file)) {
             std::string exp = expand_path(root_file);
-            load_config_file_internal(exp, colors, metrics, m_loaded_files, 0);
+            load_config_file_internal(exp, staging_colors, staging_metrics, staging_files, 0);
+            root_loaded = true;
             break;
         }
+    }
+
+    if (!root_loaded) {
+        std::cerr << "[miqutoolkit] Warning: No root miqutoolkit.conf found during config init.\n";
     }
 
     // 2. Active Theme Palette from miqutheme (~/.config/miqutheme/current/miqutoolkit.conf)
@@ -285,13 +291,13 @@ void Config::init_toolkit_defaults() {
     if (!theme_dir.empty()) {
         std::string theme_conf = theme_dir + "/current/miqutoolkit.conf";
         if (fs::exists(theme_conf)) {
-            load_config_file_internal(expand_path(theme_conf), colors, metrics, m_loaded_files, 0);
+            load_config_file_internal(expand_path(theme_conf), staging_colors, staging_metrics, staging_files, 0);
         } else {
             // Track path so inotify watches directory for creation
             std::string abs_theme;
             try { abs_theme = fs::absolute(theme_conf).string(); } catch (...) { abs_theme = theme_conf; }
-            if (std::find(m_loaded_files.begin(), m_loaded_files.end(), abs_theme) == m_loaded_files.end()) {
-                m_loaded_files.push_back(abs_theme);
+            if (std::find(staging_files.begin(), staging_files.end(), abs_theme) == staging_files.end()) {
+                staging_files.push_back(abs_theme);
             }
         }
     }
@@ -302,21 +308,26 @@ void Config::init_toolkit_defaults() {
     if (!user_cfg_file.empty()) {
         if (fs::exists(user_cfg_file)) {
             std::string exp = expand_path(user_cfg_file);
-            load_config_file_internal(exp, colors, metrics, m_loaded_files, 0);
+            load_config_file_internal(exp, staging_colors, staging_metrics, staging_files, 0);
         } else {
             // Track path so inotify watches directory for creation
             std::string abs_user;
             try { abs_user = fs::absolute(user_cfg_file).string(); } catch (...) { abs_user = user_cfg_file; }
-            if (std::find(m_loaded_files.begin(), m_loaded_files.end(), abs_user) == m_loaded_files.end()) {
-                m_loaded_files.push_back(abs_user);
+            if (std::find(staging_files.begin(), staging_files.end(), abs_user) == staging_files.end()) {
+                staging_files.push_back(abs_user);
             }
         }
     }
 
     // 4. Re-apply app-specific config file on top of defaults if one was registered
     if (!m_app_config_file.empty() && fs::exists(m_app_config_file)) {
-        load_config_file_internal(m_app_config_file, colors, metrics, m_loaded_files, 0);
+        load_config_file_internal(m_app_config_file, staging_colors, staging_metrics, staging_files, 0);
     }
+
+    // Atomically commit staged configuration
+    colors = staging_colors;
+    metrics = staging_metrics;
+    m_loaded_files = std::move(staging_files);
 
     notify_changed();
 }
