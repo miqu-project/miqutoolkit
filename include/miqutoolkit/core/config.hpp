@@ -28,7 +28,7 @@ public:
     } colors;
 
     struct Metrics {
-        int corner_radius = 12;
+        int corner_radius = 18;
         int border_width = 1;
         std::string icon_theme = "hicolor";
         std::string font_family = "Sans";
