@@ -180,6 +180,7 @@ void TooltipManager::trigger_show() {
 }
 
 void TooltipManager::show_in_window(Window* window, const std::string& text, const std::string& shortcut, const Rect& anchor_bounds) {
+    if (!window) return;
     if (!m_inwin_tooltip_view) {
         m_inwin_tooltip_view = std::make_shared<TooltipView>();
     }
@@ -284,23 +285,34 @@ void TooltipManager::show_for_layer_window(Window* window, const std::string& te
         }
     }
 
-    m_overlay_window = std::make_shared<Window>();
-    m_overlay_window->set_role(WindowRole::LayerOverlay);
-    m_overlay_window->set_output(window->get_output());
-    m_overlay_window->set_layer_namespace("miqu-tooltip");
-    m_overlay_window->set_anchors(anchors);
-    m_overlay_window->set_exclusive_zone(-1);
-    m_overlay_window->set_content_margin(margin);
-    m_overlay_window->set_preferred_size(tip_w, tip_h);
-    m_overlay_window->set_content_size(tip_w, tip_h);
-    m_overlay_window->set_keyboard_interactive(false);
-    m_overlay_window->set_transparent(true);
-    m_overlay_window->set_content_view(m_overlay_tooltip_view);
+    auto overlay = std::make_shared<Window>();
+    overlay->set_role(WindowRole::LayerOverlay);
+    overlay->set_output(window->get_output());
+    overlay->set_layer_namespace("miqu-tooltip");
+    overlay->set_anchors(anchors);
+    overlay->set_exclusive_zone(-1);
+    overlay->set_content_margin(margin);
+    overlay->set_preferred_size(tip_w, tip_h);
+    overlay->set_content_size(tip_w, tip_h);
+    overlay->set_keyboard_interactive(false);
+    overlay->set_transparent(true);
+    overlay->set_content_view(m_overlay_tooltip_view);
 
-    if (!m_overlay_window->init()) {
-        m_overlay_window = nullptr;
+    m_overlay_window = overlay;
+
+    if (!overlay->init()) {
+        if (m_overlay_window == overlay) {
+            m_overlay_window = nullptr;
+        }
         return;
     }
+
+    // Guard against dismissal during init()'s synchronous wl_display_roundtrip
+    if (m_overlay_window != overlay || !m_overlay_window) {
+        overlay->close();
+        return;
+    }
+
     m_overlay_window->show();
     m_is_showing = true;
 }
