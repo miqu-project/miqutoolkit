@@ -7,6 +7,8 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <chrono>
+#include <ctime>
 
 namespace miqu {
 
@@ -262,64 +264,39 @@ void Config::init_toolkit_defaults() {
     Metrics staging_metrics{};
     std::vector<std::string> staging_files;
 
-    // 1. Authoritative Root Defaults (Dead End Authority) - always loaded first
-    const std::vector<std::string> root_candidates = {
-        "/usr/share/miqutoolkit/miqutoolkit.conf",
-        "/etc/xdg/miqutoolkit/miqutoolkit.conf",
-        "/etc/miqutoolkit/miqutoolkit.conf",
-        "/usr/local/share/miqutoolkit/miqutoolkit.conf",
-        "assets/miqutoolkit.conf",
-        "../assets/miqutoolkit.conf"
-    };
-
-    bool root_loaded = false;
-    for (const auto& root_file : root_candidates) {
-        if (fs::exists(root_file)) {
-            std::string exp = expand_path(root_file);
-            load_config_file_internal(exp, staging_colors, staging_metrics, staging_files, 0);
-            root_loaded = true;
-            break;
-        }
-    }
-
-    if (!root_loaded) {
-        std::cerr << "[miqutoolkit] Warning: No root miqutoolkit.conf found during config init.\n";
-    }
-
-    // 2. Active Theme Palette from miqutheme (~/.config/miqutheme/current/miqutoolkit.conf)
-    std::string theme_dir = FsUtils::get_user_config_dir("miqutheme");
-    if (!theme_dir.empty()) {
-        std::string theme_conf = theme_dir + "/current/miqutoolkit.conf";
-        if (fs::exists(theme_conf)) {
-            load_config_file_internal(expand_path(theme_conf), staging_colors, staging_metrics, staging_files, 0);
-        } else {
-            // Track path so inotify watches directory for creation
-            std::string abs_theme;
-            try { abs_theme = fs::absolute(theme_conf).string(); } catch (...) { abs_theme = theme_conf; }
-            if (std::find(staging_files.begin(), staging_files.end(), abs_theme) == staging_files.end()) {
-                staging_files.push_back(abs_theme);
-            }
-        }
-    }
-
-    // 3. User Global Customizations (~/.config/miqutoolkit/miqutoolkit.conf)
+    // 1. Resolve user configuration path (~/.config/miqutoolkit/miqutoolkit.conf)
     std::string user_cfg_dir = FsUtils::get_user_config_dir("miqutoolkit");
     std::string user_cfg_file = user_cfg_dir.empty() ? "" : (user_cfg_dir + "/miqutoolkit.conf");
-    if (!user_cfg_file.empty()) {
-        if (fs::exists(user_cfg_file)) {
-            std::string exp = expand_path(user_cfg_file);
-            load_config_file_internal(exp, staging_colors, staging_metrics, staging_files, 0);
-        } else {
-            // Track path so inotify watches directory for creation
-            std::string abs_user;
-            try { abs_user = fs::absolute(user_cfg_file).string(); } catch (...) { abs_user = user_cfg_file; }
-            if (std::find(staging_files.begin(), staging_files.end(), abs_user) == staging_files.end()) {
-                staging_files.push_back(abs_user);
+
+    std::string target_file;
+    if (!user_cfg_file.empty() && fs::exists(user_cfg_file)) {
+        // Tier 2: Exclusive User Authority (bypasses system file completely)
+        target_file = expand_path(user_cfg_file);
+    } else {
+        // Tier 1: System Baseline Fallback (only loaded if user config does not exist)
+        const std::vector<std::string> root_candidates = {
+            "/usr/share/miqutoolkit/miqutoolkit.conf",
+            "/etc/xdg/miqutoolkit/miqutoolkit.conf",
+            "/etc/miqutoolkit/miqutoolkit.conf",
+            "/usr/local/share/miqutoolkit/miqutoolkit.conf",
+            "assets/miqutoolkit.conf",
+            "../assets/miqutoolkit.conf"
+        };
+        for (const auto& root_file : root_candidates) {
+            if (fs::exists(root_file)) {
+                target_file = expand_path(root_file);
+                break;
             }
         }
     }
 
-    // 4. Re-apply app-specific config file on top of defaults if one was registered
+    if (!target_file.empty()) {
+        load_config_file_internal(target_file, staging_colors, staging_metrics, staging_files, 0);
+    } else {
+        std::cerr << "[miqutoolkit] Warning: No miqutoolkit.conf found during config init.\n";
+    }
+
+    // 2. Re-apply app-specific config file on top of defaults if one was registered
     if (!m_app_config_file.empty() && fs::exists(m_app_config_file)) {
         load_config_file_internal(m_app_config_file, staging_colors, staging_metrics, staging_files, 0);
     }
@@ -341,7 +318,7 @@ std::string Config::init_user_config(
 
     std::string primary = main_file.empty() ? (app_name + ".conf") : main_file;
 
-    // 1. Resolve user config directory
+    // 1. Resolve user config directory (~/.config/<app_name>)
     std::string user_cfg_dir;
     const char* xdg_config = getenv("XDG_CONFIG_HOME");
     if (xdg_config && *xdg_config) {
@@ -357,24 +334,35 @@ std::string Config::init_user_config(
     std::error_code ec;
     fs::create_directories(user_cfg_dir, ec);
 
+    // Format timestamp for safe archiving (YYYYMMDD-HHMMSS)
+    auto now = std::chrono::system_clock::now();
+    std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+    std::tm tm_buf{};
+    localtime_r(&now_time, &tm_buf);
+    char ts[32];
+    std::strftime(ts, sizeof(ts), "%Y%m%d-%H%M%S", &tm_buf);
+
     std::vector<std::string> all_files = {primary};
     all_files.insert(all_files.end(), additional_files.begin(), additional_files.end());
 
     for (const auto& fname : all_files) {
         fs::path dest = fs::path(user_cfg_dir) / fname;
         if (fs::exists(dest)) {
-            continue; // File already present in user config, keep user customizations
+            // Safe Archiving: rename existing file to .bak.<timestamp>
+            std::string bak_name = fname + ".bak." + ts;
+            fs::path bak_dest = fs::path(user_cfg_dir) / bak_name;
+            fs::rename(dest, bak_dest, ec);
+            if (!ec) {
+                std::cout << "[" << app_name << "] Backed up existing configuration to: " << bak_dest.string() << "\n";
+            }
         }
 
         std::vector<std::string> candidates = {
-            "/usr/share/" + app_name + "/" + fname + ".template",
             "/usr/share/" + app_name + "/" + fname,
             "/etc/xdg/" + app_name + "/" + fname,
             "/etc/" + app_name + "/" + fname,
             "/usr/local/share/" + app_name + "/" + fname,
-            "assets/" + fname + ".template",
             "assets/" + fname,
-            "../assets/" + fname + ".template",
             "../assets/" + fname
         };
 

@@ -214,6 +214,6 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/miqutoolkit.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
 
-install(FILES assets/miqutoolkit.conf assets/miqutoolkit.conf.template
+install(FILES assets/miqutoolkit.conf
     DESTINATION ${CMAKE_INSTALL_DATADIR}/miqutoolkit
 )
