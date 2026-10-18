@@ -18,55 +18,122 @@ public:
     Button() = default;
     explicit Button(std::string text) : m_text(std::move(text)) {}
 
-    void set_text(std::string text) { m_text = std::move(text); }
+    void set_text(std::string text) {
+        if (m_text != text) {
+            m_text = std::move(text);
+            request_redraw();
+        }
+    }
     const std::string& get_text() const { return m_text; }
 
-    void set_icon(std::string icon) { m_icon = std::move(icon); }
-    void set_font_family(std::string family) { m_font_family = std::move(family); }
+    void set_icon(std::string icon) {
+        if (m_icon != icon) {
+            m_icon = std::move(icon);
+            request_redraw();
+        }
+    }
+    void set_font_family(std::string family) {
+        if (m_font_family != family) {
+            m_font_family = std::move(family);
+            request_redraw();
+        }
+    }
     const std::string& get_font_family() const { return m_font_family; }
-    void set_text_size(int size) { m_font_size = size; }
-    void set_bold(bool bold) { m_font_bold = bold; }
-    void set_radius(int radius) { m_corner_radius = radius; }
+    void set_text_size(int size) {
+        if (m_font_size != size) {
+            m_font_size = size;
+            request_redraw();
+        }
+    }
+    void set_bold(bool bold) {
+        if (m_font_bold != bold) {
+            m_font_bold = bold;
+            request_redraw();
+        }
+    }
+    void set_radius(int radius) {
+        if (m_corner_radius != radius) {
+            m_corner_radius = radius;
+            request_redraw();
+        }
+    }
 
-    void set_style(ButtonStyle style) { m_style = style; }
+    void set_style(ButtonStyle style) {
+        if (m_style != style) {
+            m_style = style;
+            request_redraw();
+        }
+    }
     ButtonStyle get_style() const { return m_style; }
-    void set_primary(bool primary = true) { m_style = primary ? ButtonStyle::Primary : ButtonStyle::Standard; }
-    void set_outlined(bool outlined = true) { m_style = outlined ? ButtonStyle::Outlined : ButtonStyle::Standard; }
-    void set_flat(bool flat = true) { m_style = flat ? ButtonStyle::Flat : ButtonStyle::Standard; }
+    void set_primary(bool primary = true) { set_style(primary ? ButtonStyle::Primary : ButtonStyle::Standard); }
+    void set_outlined(bool outlined = true) { set_style(outlined ? ButtonStyle::Outlined : ButtonStyle::Standard); }
+    void set_flat(bool flat = true) { set_style(flat ? ButtonStyle::Flat : ButtonStyle::Standard); }
 
-    void set_icon_size(int size) { m_icon_size = size; }
+    void set_icon_size(int size) {
+        if (m_icon_size != size) {
+            m_icon_size = size;
+            request_redraw();
+        }
+    }
     int get_icon_size() const { return m_icon_size; }
 
-    void set_content_gravity(Gravity gravity) { m_content_gravity = gravity; }
+    void set_text_alignment(TextAlignment align) {
+        if (m_text_alignment != align) {
+            m_text_alignment = align;
+            request_redraw();
+        }
+    }
+    TextAlignment get_text_alignment() const { return m_text_alignment; }
+
+    void set_content_gravity(Gravity gravity) {
+        if (m_content_gravity != gravity) {
+            m_content_gravity = gravity;
+            request_redraw();
+        }
+    }
     Gravity get_content_gravity() const { return m_content_gravity; }
 
-    void set_border_width(double width) { m_border_width = width; }
+    void set_border_width(double width) {
+        if (m_border_width != width) {
+            m_border_width = width;
+            request_redraw();
+        }
+    }
     double get_border_width() const { return m_border_width; }
-    void set_bordered(bool bordered) { m_border_width = bordered ? -1.0 : 0.0; }
+    void set_bordered(bool bordered) { set_border_width(bordered ? -1.0 : 0.0); }
     bool is_bordered() const { return m_border_width != 0.0; }
 
     void set_custom_colors(const Color& bg, const Color& fg) {
         m_custom_bg = bg;
         m_custom_fg = fg;
         m_use_custom_colors = true;
+        request_redraw();
     }
 
     void set_text_color(const Color& color) {
         m_custom_fg = color;
         m_has_custom_text_color = true;
+        request_redraw();
     }
 
     void set_background_color(const Color& color) {
         m_custom_bg = color;
         m_has_custom_bg = true;
+        request_redraw();
     }
 
     void set_border_color(const Color& color) {
         m_custom_border_color = color;
         m_has_custom_border_color = true;
+        request_redraw();
     }
 
-    void set_selected(bool sel) { m_selected = sel; }
+    void set_selected(bool sel) {
+        if (m_selected != sel) {
+            m_selected = sel;
+            request_redraw();
+        }
+    }
     bool is_selected() const { return m_selected; }
 
     void draw(cairo_t* cr, const Rect& bounds) override;
@@ -84,6 +151,7 @@ private:
     bool m_font_bold = false;
     int m_corner_radius = -1;
     ButtonStyle m_style = ButtonStyle::Standard;
+    TextAlignment m_text_alignment = TextAlignment::Center;
 
     bool m_hovered = false;
     bool m_pressed = false;
@@ -181,6 +249,11 @@ public:
 
     std::shared_ptr<ButtonBuilder> borderColor(const Color& col) {
         m_view->set_border_color(col);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ButtonBuilder> textAlignment(TextAlignment a) {
+        m_view->set_text_alignment(a);
         return shared_from_this();
     }
 

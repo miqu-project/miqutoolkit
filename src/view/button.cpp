@@ -201,6 +201,17 @@ void Button::draw(cairo_t* cr, const Rect& bounds) {
         pango_layout_set_font_description(text_layout, desc);
         pango_font_description_free(desc);
 
+        if (m_text_alignment == TextAlignment::Center) {
+            pango_layout_set_alignment(text_layout, PANGO_ALIGN_CENTER);
+        } else if (m_text_alignment == TextAlignment::Right) {
+            pango_layout_set_alignment(text_layout, PANGO_ALIGN_RIGHT);
+        } else if (m_text_alignment == TextAlignment::Justify) {
+            pango_layout_set_alignment(text_layout, PANGO_ALIGN_LEFT);
+            pango_layout_set_justify(text_layout, TRUE);
+        } else {
+            pango_layout_set_alignment(text_layout, PANGO_ALIGN_LEFT);
+        }
+
         int unconstrained_w = 0, unconstrained_h = 0;
         pango_layout_get_pixel_size(text_layout, &unconstrained_w, &unconstrained_h);
 
@@ -212,6 +223,7 @@ void Button::draw(cairo_t* cr, const Rect& bounds) {
         } else {
             text_w = unconstrained_w;
             text_h = unconstrained_h;
+            pango_layout_set_width(text_layout, text_w * PANGO_SCALE);
         }
     }
 

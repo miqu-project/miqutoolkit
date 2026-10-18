@@ -60,6 +60,25 @@ public:
         return base;
     }
 
+    static std::string get_user_config_file(const std::string& app_name, const std::string& filename = "") {
+        std::string dir = get_user_config_dir(app_name);
+        if (dir.empty()) return "";
+        std::string fname = !filename.empty() ? filename : (app_name + ".conf");
+        return dir + "/" + fname;
+    }
+
+    static std::string get_system_config_file(const std::string& app_name, const std::string& filename = "") {
+        std::string fname = !filename.empty() ? filename : (app_name + ".conf");
+        for (const char* prefix : {"/usr/share", "/usr/local/share", "/etc"}) {
+            std::string cand = std::string(prefix) + "/" + app_name + "/" + fname;
+            std::error_code ec;
+            if (fs::exists(cand, ec)) {
+                return cand;
+            }
+        }
+        return "/usr/share/" + app_name + "/" + fname;
+    }
+
     static std::string init_user_config(
         const std::string& app_name,
         const std::string& main_file = "",

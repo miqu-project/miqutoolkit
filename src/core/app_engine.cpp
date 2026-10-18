@@ -285,6 +285,23 @@ void AppEngine::cancel_delayed(uint64_t timer_id) {
     }
 }
 
+uint64_t AppEngine::add_repeating_timer(int interval_ms, std::function<void()> task) {
+    if (!task || interval_ms <= 0) return 0;
+    uint64_t id = 0;
+    {
+        std::lock_guard<std::mutex> lock(m_tasks_mutex);
+        id = m_next_timer_id++;
+        auto trigger = std::chrono::steady_clock::now() + std::chrono::milliseconds(interval_ms);
+        m_delayed_tasks.push_back({ id, trigger, std::move(task), interval_ms });
+    }
+    if (m_wakeup_fd >= 0) {
+        uint64_t val = 1;
+        ssize_t s = write(m_wakeup_fd, &val, sizeof(val));
+        (void)s;
+    }
+    return id;
+}
+
 void AppEngine::request_redraw_all() {
     for (auto& win : m_windows) {
         if (win) {
@@ -403,8 +420,13 @@ int AppEngine::enter_loop() {
             auto it = m_delayed_tasks.begin();
             while (it != m_delayed_tasks.end()) {
                 if (now >= it->trigger_time) {
-                    if (it->task) expired_tasks.push_back(std::move(it->task));
-                    it = m_delayed_tasks.erase(it);
+                    if (it->task) expired_tasks.push_back(it->task);
+                    if (it->interval_ms > 0) {
+                        it->trigger_time = now + std::chrono::milliseconds(it->interval_ms);
+                        ++it;
+                    } else {
+                        it = m_delayed_tasks.erase(it);
+                    }
                 } else {
                     ++it;
                 }

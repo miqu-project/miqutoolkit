@@ -112,6 +112,7 @@ add_library(miqutoolkit SHARED
     src/view/card_view.cpp
     src/view/text_view.cpp
     src/view/button.cpp
+    src/view/avatar_view.cpp
     src/view/image_view.cpp
     src/view/edit_text.cpp
     src/view/search_view.cpp

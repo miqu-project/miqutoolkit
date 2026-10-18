@@ -5,19 +5,6 @@
 
 namespace miqu {
 
-enum class TextAlignment {
-    Left,
-    Center,
-    Right,
-    Justify
-};
-
-enum class TextVerticalAlignment {
-    Top,
-    Center,
-    Bottom
-};
-
 enum class WrapMode {
     None,
     Word,
@@ -64,25 +51,51 @@ public:
     void set_heading_level(int level) { m_heading_level = level; request_redraw(); }
     int get_heading_level() const { return m_heading_level; }
 
-    void set_caption(bool c) { m_caption = c; }
+    void set_caption(bool c) {
+        if (m_caption != c) {
+            m_caption = c;
+            request_redraw();
+        }
+    }
     bool is_caption() const { return m_caption; }
 
-    void set_muted(bool m) { m_muted = m; }
+    void set_muted(bool m) {
+        if (m_muted != m) {
+            m_muted = m;
+            request_redraw();
+        }
+    }
     bool is_muted() const { return m_muted; }
 
-    void set_text_alignment(TextAlignment align) { m_align = align; }
+    void set_text_alignment(TextAlignment align) {
+        if (m_align != align) {
+            m_align = align;
+            request_redraw();
+        }
+    }
     TextAlignment get_text_alignment() const { return m_align; }
 
+    void set_center_aligned(bool center = true) {
+        set_text_alignment(center ? TextAlignment::Center : TextAlignment::Left);
+    }
+    bool is_center_aligned() const { return m_align == TextAlignment::Center; }
+
     void set_vertical_alignment(TextVerticalAlignment align) {
-        m_vertical_align = align;
-        m_has_custom_vertical_align = true;
+        if (m_vertical_align != align || !m_has_custom_vertical_align) {
+            m_vertical_align = align;
+            m_has_custom_vertical_align = true;
+            request_redraw();
+        }
     }
     TextVerticalAlignment get_vertical_alignment() const { return m_vertical_align; }
 
     void set_multiline(bool m) {
-        m_multiline = m;
-        if (m && m_wrap_mode == WrapMode::None) {
-            m_wrap_mode = WrapMode::WordChar;
+        if (m_multiline != m) {
+            m_multiline = m;
+            if (m && m_wrap_mode == WrapMode::None) {
+                m_wrap_mode = WrapMode::WordChar;
+            }
+            request_redraw();
         }
     }
     bool is_multiline() const { return m_multiline; }
@@ -91,33 +104,52 @@ public:
     bool is_wrap() const { return m_multiline; }
 
     void set_wrap_mode(WrapMode mode) {
-        m_wrap_mode = mode;
-        if (mode != WrapMode::None) {
-            m_multiline = true;
+        if (m_wrap_mode != mode) {
+            m_wrap_mode = mode;
+            if (mode != WrapMode::None) {
+                m_multiline = true;
+            }
+            request_redraw();
         }
     }
     WrapMode get_wrap_mode() const { return m_wrap_mode; }
 
-    void set_max_lines(int max_lines) { m_max_lines = max_lines; }
+    void set_max_lines(int max_lines) {
+        if (m_max_lines != max_lines) {
+            m_max_lines = max_lines;
+            request_redraw();
+        }
+    }
     int get_max_lines() const { return m_max_lines; }
 
     void set_ellipsize(bool ellipsize) {
-        m_ellipsize = ellipsize;
-        if (!ellipsize) {
-            m_ellipsize_mode = EllipsizeMode::None;
-        } else if (m_ellipsize_mode == EllipsizeMode::None) {
-            m_ellipsize_mode = EllipsizeMode::End;
+        if (m_ellipsize != ellipsize) {
+            m_ellipsize = ellipsize;
+            if (!ellipsize) {
+                m_ellipsize_mode = EllipsizeMode::None;
+            } else if (m_ellipsize_mode == EllipsizeMode::None) {
+                m_ellipsize_mode = EllipsizeMode::End;
+            }
+            request_redraw();
         }
     }
     bool is_ellipsize() const { return m_ellipsize && m_ellipsize_mode != EllipsizeMode::None; }
 
     void set_ellipsize_mode(EllipsizeMode mode) {
-        m_ellipsize_mode = mode;
-        m_ellipsize = (mode != EllipsizeMode::None);
+        if (m_ellipsize_mode != mode) {
+            m_ellipsize_mode = mode;
+            m_ellipsize = (mode != EllipsizeMode::None);
+            request_redraw();
+        }
     }
     EllipsizeMode get_ellipsize_mode() const { return m_ellipsize_mode; }
 
-    void set_line_spacing(float spacing) { m_line_spacing = spacing; }
+    void set_line_spacing(float spacing) {
+        if (std::abs(m_line_spacing - spacing) > 0.001f) {
+            m_line_spacing = spacing;
+            request_redraw();
+        }
+    }
     float get_line_spacing() const { return m_line_spacing; }
 
     void draw(cairo_t* cr, const Rect& bounds) override;
@@ -206,6 +238,21 @@ public:
 
     std::shared_ptr<TextViewBuilder> textAlignment(TextAlignment a) {
         m_view->set_text_alignment(a);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<TextViewBuilder> center(bool c = true) {
+        m_view->set_center_aligned(c);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<TextViewBuilder> right() {
+        m_view->set_text_alignment(TextAlignment::Right);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<TextViewBuilder> justify() {
+        m_view->set_text_alignment(TextAlignment::Justify);
         return shared_from_this();
     }
 

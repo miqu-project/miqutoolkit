@@ -34,6 +34,8 @@ public:
     void post(std::function<void()> task);
     uint64_t post_delayed(int delay_ms, std::function<void()> task);
     void cancel_delayed(uint64_t timer_id);
+    uint64_t add_repeating_timer(int interval_ms, std::function<void()> task);
+    void cancel_timer(uint64_t timer_id) { cancel_delayed(timer_id); }
     void request_redraw_all();
 
     struct wl_display* get_display() const { return m_display; }
@@ -111,6 +113,7 @@ private:
         uint64_t id;
         std::chrono::steady_clock::time_point trigger_time;
         std::function<void()> task;
+        int interval_ms = 0;
     };
     std::vector<DelayedTask> m_delayed_tasks;
     uint64_t m_next_timer_id = 1;

@@ -71,5 +71,18 @@ struct TouchEvent {
     uint32_t time = 0;
 };
 
+enum class TextAlignment {
+    Left,
+    Center,
+    Right,
+    Justify
+};
+
+enum class TextVerticalAlignment {
+    Top,
+    Center,
+    Bottom
+};
+
 } // namespace miqu
 

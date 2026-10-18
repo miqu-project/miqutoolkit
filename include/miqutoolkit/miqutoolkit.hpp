@@ -23,6 +23,7 @@
 #include "miqutoolkit/view/edit_text.hpp"
 #include "miqutoolkit/view/search_view.hpp"
 #include "miqutoolkit/view/button.hpp"
+#include "miqutoolkit/view/avatar_view.hpp"
 #include "miqutoolkit/view/image_view.hpp"
 #include "miqutoolkit/view/grid_view.hpp"
 #include "miqutoolkit/view/slider.hpp"
