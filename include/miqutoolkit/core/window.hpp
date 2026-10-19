@@ -98,6 +98,8 @@ public:
 
     void set_on_close(std::function<void()> cb) { m_on_close = std::move(cb); }
     void set_on_key(std::function<void(const KeyPressEvent&)> cb) { m_on_key = std::move(cb); }
+    void set_on_keyboard_enter(std::function<void()> cb) { m_on_keyboard_enter = std::move(cb); }
+    void set_on_keyboard_leave(std::function<void()> cb) { m_on_keyboard_leave = std::move(cb); }
 
     int get_width() const { return m_width; }
     int get_height() const { return m_height; }
@@ -196,6 +198,8 @@ private:
 
     std::function<void()> m_on_close;
     std::function<void(const KeyPressEvent&)> m_on_key;
+    std::function<void()> m_on_keyboard_enter;
+    std::function<void()> m_on_keyboard_leave;
 
     double m_last_x = 0;
     double m_last_y = 0;
@@ -306,6 +310,16 @@ public:
 
     std::shared_ptr<WindowBuilder> onKey(std::function<void(const KeyPressEvent&)> cb) {
         m_window->set_on_key(std::move(cb));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<WindowBuilder> onKeyboardEnter(std::function<void()> cb) {
+        m_window->set_on_keyboard_enter(std::move(cb));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<WindowBuilder> onKeyboardLeave(std::function<void()> cb) {
+        m_window->set_on_keyboard_leave(std::move(cb));
         return shared_from_this();
     }
 

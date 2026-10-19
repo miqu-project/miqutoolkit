@@ -544,141 +544,19 @@ static std::string get_rendered_icon_file(const std::string& key) {
     return get_rendered_icon_cache_dir() + "/" + filename;
 }
 
-static void box_blur_horizontal(const uint32_t* src, uint32_t* dst, int w, int h, int stride_words, int r) {
-    float div = 1.0f / (2 * r + 1);
-    for (int y = 0; y < h; ++y) {
-        int row_offset = y * stride_words;
-        int sum_a = 0, sum_r = 0, sum_g = 0, sum_b = 0;
-
-        for (int i = -r; i <= r; ++i) {
-            int x = std::clamp(i, 0, w - 1);
-            uint32_t p = src[row_offset + x];
-            sum_a += (p >> 24) & 0xff;
-            sum_r += (p >> 16) & 0xff;
-            sum_g += (p >> 8) & 0xff;
-            sum_b += p & 0xff;
-        }
-
-        for (int x = 0; x < w; ++x) {
-            dst[row_offset + x] = (static_cast<uint32_t>(sum_a * div) << 24) |
-                                  (static_cast<uint32_t>(sum_r * div) << 16) |
-                                  (static_cast<uint32_t>(sum_g * div) << 8) |
-                                  static_cast<uint32_t>(sum_b * div);
-
-            int next_x = std::min(w - 1, x + r + 1);
-            int prev_x = std::max(0, x - r);
-
-            uint32_t p_next = src[row_offset + next_x];
-            uint32_t p_prev = src[row_offset + prev_x];
-
-            sum_a += ((p_next >> 24) & 0xff) - ((p_prev >> 24) & 0xff);
-            sum_r += ((p_next >> 16) & 0xff) - ((p_prev >> 16) & 0xff);
-            sum_g += ((p_next >> 8) & 0xff) - ((p_prev >> 8) & 0xff);
-            sum_b += (p_next & 0xff) - (p_prev & 0xff);
-        }
+static cairo_surface_t* apply_dim(cairo_surface_t* surf, float dim_alpha) {
+    if (!surf || dim_alpha <= 0.001f) {
+        return surf;
     }
+    cairo_t* dim_cr = cairo_create(surf);
+    cairo_set_source_rgba(dim_cr, 0.0, 0.0, 0.0, std::clamp(dim_alpha, 0.0f, 1.0f));
+    cairo_paint(dim_cr);
+    cairo_destroy(dim_cr);
+    cairo_surface_flush(surf);
+    return surf;
 }
 
-static void box_blur_vertical(const uint32_t* src, uint32_t* dst, int w, int h, int stride_words, int r) {
-    float div = 1.0f / (2 * r + 1);
-    for (int x = 0; x < w; ++x) {
-        int sum_a = 0, sum_r = 0, sum_g = 0, sum_b = 0;
-
-        for (int i = -r; i <= r; ++i) {
-            int y = std::clamp(i, 0, h - 1);
-            uint32_t p = src[y * stride_words + x];
-            sum_a += (p >> 24) & 0xff;
-            sum_r += (p >> 16) & 0xff;
-            sum_g += (p >> 8) & 0xff;
-            sum_b += p & 0xff;
-        }
-
-        for (int y = 0; y < h; ++y) {
-            dst[y * stride_words + x] = (static_cast<uint32_t>(sum_a * div) << 24) |
-                                        (static_cast<uint32_t>(sum_r * div) << 16) |
-                                        (static_cast<uint32_t>(sum_g * div) << 8) |
-                                        static_cast<uint32_t>(sum_b * div);
-
-            int next_y = std::min(h - 1, y + r + 1);
-            int prev_y = std::max(0, y - r);
-
-            uint32_t p_next = src[next_y * stride_words + x];
-            uint32_t p_prev = src[prev_y * stride_words + x];
-
-            sum_a += ((p_next >> 24) & 0xff) - ((p_prev >> 24) & 0xff);
-            sum_r += ((p_next >> 16) & 0xff) - ((p_prev >> 16) & 0xff);
-            sum_g += ((p_next >> 8) & 0xff) - ((p_prev >> 8) & 0xff);
-            sum_b += (p_next & 0xff) - (p_prev & 0xff);
-        }
-    }
-}
-
-static cairo_surface_t* apply_blur_and_dim(cairo_surface_t* orig_surf, int w, int h, int blur_radius, float dim_alpha) {
-    if (!orig_surf) return nullptr;
-    if (blur_radius <= 0 && dim_alpha <= 0.001f) {
-        return orig_surf;
-    }
-
-    cairo_surface_t* final_surf = nullptr;
-
-    if (blur_radius > 0) {
-        // Downsample factor (scale 4x for extreme speed and natural low-pass smoothing)
-        int down_w = std::max(64, w / 4);
-        int down_h = std::max(64, h / 4);
-        int r = std::clamp(blur_radius / 4, 1, 40);
-
-        cairo_surface_t* small_surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, down_w, down_h);
-        cairo_t* small_cr = cairo_create(small_surf);
-        cairo_scale(small_cr, static_cast<double>(down_w) / w, static_cast<double>(down_h) / h);
-        cairo_set_source_surface(small_cr, orig_surf, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(small_cr), CAIRO_FILTER_BILINEAR);
-        cairo_paint(small_cr);
-        cairo_destroy(small_cr);
-        cairo_surface_flush(small_surf);
-
-        // Apply 3-pass box blur on small buffer
-        int stride_bytes = cairo_image_surface_get_stride(small_surf);
-        int stride_words = stride_bytes / sizeof(uint32_t);
-        uint32_t* pixels = reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(small_surf));
-
-        std::vector<uint32_t> temp_buf(stride_words * down_h);
-        for (int pass = 0; pass < 3; ++pass) {
-            box_blur_horizontal(pixels, temp_buf.data(), down_w, down_h, stride_words, r);
-            box_blur_vertical(temp_buf.data(), pixels, down_w, down_h, stride_words, r);
-        }
-        cairo_surface_mark_dirty(small_surf);
-
-        // Upsample to target dimensions
-        final_surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
-        cairo_t* up_cr = cairo_create(final_surf);
-        cairo_scale(up_cr, static_cast<double>(w) / down_w, static_cast<double>(h) / down_h);
-        cairo_set_source_surface(up_cr, small_surf, 0, 0);
-        cairo_pattern_set_filter(cairo_get_source(up_cr), CAIRO_FILTER_BILINEAR);
-        cairo_paint(up_cr);
-        cairo_surface_destroy(small_surf);
-
-        if (dim_alpha > 0.001f) {
-            cairo_set_source_rgba(up_cr, 0.0, 0.0, 0.0, std::clamp(dim_alpha, 0.0f, 1.0f));
-            cairo_paint(up_cr);
-        }
-        cairo_destroy(up_cr);
-        cairo_surface_flush(final_surf);
-
-        cairo_surface_destroy(orig_surf);
-    } else {
-        // Only dimming requested without blur
-        final_surf = orig_surf;
-        cairo_t* dim_cr = cairo_create(final_surf);
-        cairo_set_source_rgba(dim_cr, 0.0, 0.0, 0.0, std::clamp(dim_alpha, 0.0f, 1.0f));
-        cairo_paint(dim_cr);
-        cairo_destroy(dim_cr);
-        cairo_surface_flush(final_surf);
-    }
-
-    return final_surf;
-}
-
-static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w, int box_h, FitMode fit_mode, int target_size, ImageQuality quality, int blur_radius = 0, float dim_alpha = 0.0f) {
+static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w, int box_h, FitMode fit_mode, int target_size, ImageQuality quality, float dim_alpha = 0.0f) {
     if (path_or_name.empty() || box_w <= 0 || box_h <= 0) return nullptr;
 
     std::string resolved = ImageView::resolve_icon_path(path_or_name);
@@ -792,9 +670,6 @@ static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w,
 
     std::string cache_key = file_to_decode + "@" + std::to_string(req_w) + "x" + std::to_string(req_h) +
                             (preserve_aspect ? "p" : "s");
-    if (blur_radius > 0) {
-        cache_key += "b" + std::to_string(blur_radius);
-    }
     if (dim_alpha > 0.001f) {
         cache_key += "d" + std::to_string(static_cast<int>(std::round(dim_alpha * 100)));
     }
@@ -808,8 +683,8 @@ static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w,
         }
     }
 
-    // Fast disk cache for rendered SVGs / icons (only for clean unblurred icons)
-    std::string disk_cache_file = (blur_radius <= 0 && dim_alpha <= 0.001f) ? get_rendered_icon_file(cache_key) : "";
+    // Fast disk cache for rendered SVGs / icons (only for clean un-dimmed icons)
+    std::string disk_cache_file = (dim_alpha <= 0.001f) ? get_rendered_icon_file(cache_key) : "";
     bool use_disk_cache = false;
     if (!disk_cache_file.empty() && fs::exists(disk_cache_file)) {
         std::error_code dec, oec;
@@ -841,10 +716,8 @@ static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w,
     cairo_surface_t* surf = pixbuf_to_cairo_surface(pixbuf);
     g_object_unref(pixbuf);
 
-    if (surf && (blur_radius > 0 || dim_alpha > 0.001f)) {
-        int sw = cairo_image_surface_get_width(surf);
-        int sh = cairo_image_surface_get_height(surf);
-        surf = apply_blur_and_dim(surf, sw, sh, blur_radius, dim_alpha);
+    if (surf && dim_alpha > 0.001f) {
+        surf = apply_dim(surf, dim_alpha);
     }
 
     if (surf) {
@@ -895,7 +768,6 @@ void ImageView::invalidate_surface_cache() {
     m_cached_fit = FitMode::Contain;
     m_cached_quality = ImageQuality::FullOriginal;
     m_cached_target_size = 0;
-    m_cached_blur_radius = 0;
     m_cached_dim_alpha = 0.0f;
 }
 
@@ -947,12 +819,11 @@ void ImageView::draw(cairo_t* cr, const Rect& bounds) {
         m_cached_w == draw_w && m_cached_h == draw_h &&
         m_cached_fit == m_fit_mode && m_cached_quality == m_quality &&
         m_cached_target_size == m_target_size &&
-        m_cached_blur_radius == m_blur_radius &&
         std::abs(m_cached_dim_alpha - m_dim_alpha) < 0.001f) {
         surf = m_cached_surface;
     } else {
         invalidate_surface_cache();
-        cairo_surface_t* loaded = load_surface(m_source, draw_w, draw_h, m_fit_mode, m_target_size, m_quality, m_blur_radius, m_dim_alpha);
+        cairo_surface_t* loaded = load_surface(m_source, draw_w, draw_h, m_fit_mode, m_target_size, m_quality, m_dim_alpha);
         if (loaded) {
             m_cached_surface = cairo_surface_reference(loaded);
             m_cached_w = draw_w;
@@ -961,7 +832,6 @@ void ImageView::draw(cairo_t* cr, const Rect& bounds) {
             m_cached_fit = m_fit_mode;
             m_cached_quality = m_quality;
             m_cached_target_size = m_target_size;
-            m_cached_blur_radius = m_blur_radius;
             m_cached_dim_alpha = m_dim_alpha;
             surf = m_cached_surface;
         }

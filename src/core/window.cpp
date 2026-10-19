@@ -217,7 +217,7 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         }
 
         if (pressed && mb == MouseButton::Left && prev_focused && self->m_focused_view == prev_focused) {
-            if (!prev_focused->contains_point(self->m_last_x, self->m_last_y)) {
+            if (self->m_role != WindowRole::SessionLock && !prev_focused->contains_point(self->m_last_x, self->m_last_y)) {
                 self->clear_focus();
             }
         }
@@ -286,6 +286,9 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
     .enter = [](void* data, struct wl_keyboard*, uint32_t, struct wl_surface*, struct wl_array*) {
         auto* self = static_cast<Window*>(data);
         self->m_has_keyboard_focus = true;
+        if (self->m_on_keyboard_enter) {
+            self->m_on_keyboard_enter();
+        }
     },
     .leave = [](void* data, struct wl_keyboard*, uint32_t, struct wl_surface*) {
         auto* self = static_cast<Window*>(data);
@@ -293,6 +296,9 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
         auto keep_alive = self->shared_from_this();
         if (self->m_has_keyboard_focus) {
             self->m_has_keyboard_focus = false;
+            if (self->m_on_keyboard_leave) {
+                self->m_on_keyboard_leave();
+            }
             if (self->m_close_on_click_outside) {
                 if (self->m_on_close) self->m_on_close();
                 self->close();
@@ -419,7 +425,7 @@ const struct wl_touch_listener Window::s_touch_listener = {
             if (self->m_root_view->on_touch(event, self->m_allocated_content_bounds)) {
                 self->m_touch_consumed_by_view = true;
                 if (prev_focused && self->m_focused_view == prev_focused) {
-                    if (!prev_focused->contains_point(tx, ty)) {
+                    if (self->m_role != WindowRole::SessionLock && !prev_focused->contains_point(tx, ty)) {
                         self->clear_focus();
                     }
                 }
@@ -434,7 +440,7 @@ const struct wl_touch_listener Window::s_touch_listener = {
             }
 
             if (prev_focused && self->m_focused_view == prev_focused) {
-                if (!prev_focused->contains_point(tx, ty)) {
+                if (self->m_role != WindowRole::SessionLock && !prev_focused->contains_point(tx, ty)) {
                     self->clear_focus();
                 }
             }
