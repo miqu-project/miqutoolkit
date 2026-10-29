@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <cstdlib>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #include <sys/stat.h>
 #include <cstdint>
@@ -417,13 +418,46 @@ void AppManager::launch(const DesktopApp& app) {
     launch_command(app.exec_cmd, app.terminal);
 }
 
+static bool contains_shell_meta(const std::string& cmd) {
+    return cmd.find_first_of("|&;<>()$`\n*?") != std::string::npos;
+}
+
+static std::vector<std::string> split_command_args(const std::string& cmd) {
+    std::vector<std::string> args;
+    std::string current;
+    bool in_single = false;
+    bool in_double = false;
+
+    for (size_t i = 0; i < cmd.size(); ++i) {
+        char c = cmd[i];
+        if (c == '\\' && i + 1 < cmd.size() && !in_single) {
+            current += cmd[++i];
+        } else if (c == '\'' && !in_double) {
+            in_single = !in_single;
+        } else if (c == '"' && !in_single) {
+            in_double = !in_double;
+        } else if ((c == ' ' || c == '\t') && !in_single && !in_double) {
+            if (!current.empty()) {
+                args.push_back(std::move(current));
+                current.clear();
+            }
+        } else {
+            current += c;
+        }
+    }
+    if (!current.empty()) {
+        args.push_back(std::move(current));
+    }
+    return args;
+}
+
 void AppManager::launch_command(const std::string& cmd, bool terminal) {
     if (cmd.empty()) return;
 
     std::string full_cmd = cmd;
     if (terminal) {
         const char* env_term = getenv("TERMINAL");
-        std::string term = (env_term && *env_term) ? env_term : "kitty || foot || alacritty || wezterm || weston-terminal || xterm";
+        std::string term = (env_term && *env_term) ? env_term : "kitty";
         full_cmd = term + " -e " + cmd;
     }
 
@@ -432,6 +466,26 @@ void AppManager::launch_command(const std::string& cmd, bool terminal) {
         setsid();
         pid_t grand_child = fork();
         if (grand_child == 0) {
+            if (!terminal) {
+                int null_fd = open("/dev/null", O_RDWR);
+                if (null_fd >= 0) {
+                    dup2(null_fd, STDIN_FILENO);
+                    dup2(null_fd, STDOUT_FILENO);
+                    dup2(null_fd, STDERR_FILENO);
+                    if (null_fd > 2) close(null_fd);
+                }
+            }
+
+            if (!terminal && !contains_shell_meta(full_cmd)) {
+                auto args = split_command_args(full_cmd);
+                if (!args.empty()) {
+                    std::vector<char*> c_argv;
+                    c_argv.reserve(args.size() + 1);
+                    for (auto& s : args) c_argv.push_back(s.data());
+                    c_argv.push_back(nullptr);
+                    execvp(c_argv[0], c_argv.data());
+                }
+            }
             execl("/bin/sh", "sh", "-c", full_cmd.c_str(), nullptr);
             _exit(1);
         }
