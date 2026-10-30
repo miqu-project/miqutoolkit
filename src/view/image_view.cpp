@@ -37,6 +37,58 @@ static std::unordered_set<std::string> s_pending_thumbnails;
 static std::mutex s_theme_hierarchy_mutex;
 static std::map<std::string, std::vector<std::string>> s_cached_theme_search_dirs;
 
+static std::string sanitize_theme_name(const std::string& theme) {
+    if (theme.empty()) return "default";
+    std::string safe = theme;
+    for (char& c : safe) {
+        if (!std::isalnum(c) && c != '-' && c != '_') c = '_';
+    }
+    return safe;
+}
+
+static std::string get_icon_path_cache_file(const std::string& theme) {
+    const char* home = getenv("HOME");
+    if (!home) return "";
+    const char* xdg_cache = getenv("XDG_CACHE_HOME");
+    std::string base = (xdg_cache && *xdg_cache) ? xdg_cache : (std::string(home) + "/.cache");
+    std::string dir = base + "/miqutoolkit";
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    return dir + "/icon_paths_" + sanitize_theme_name(theme) + ".cache";
+}
+
+static std::unordered_set<std::string> s_loaded_icon_cache_themes;
+
+static void ensure_icon_cache_loaded(const std::string& user_theme) {
+    if (s_loaded_icon_cache_themes.count(user_theme)) return;
+    s_loaded_icon_cache_themes.insert(user_theme);
+
+    std::string file = get_icon_path_cache_file(user_theme);
+    if (file.empty() || !fs::exists(file)) return;
+
+    std::ifstream in(file);
+    if (!in.is_open()) return;
+
+    std::string line;
+    while (std::getline(in, line)) {
+        size_t tab = line.find('\t');
+        if (tab != std::string::npos) {
+            std::string key = line.substr(0, tab);
+            std::string path = line.substr(tab + 1);
+            s_path_cache[key] = path;
+        }
+    }
+}
+
+static void persist_icon_cache_entry(const std::string& user_theme, const std::string& key, const std::string& path) {
+    std::string file = get_icon_path_cache_file(user_theme);
+    if (file.empty()) return;
+    std::ofstream out(file, std::ios::app);
+    if (out.is_open()) {
+        out << key << '\t' << path << '\n';
+    }
+}
+
 static std::string trim_str(const std::string& str) {
     return StringUtils::trim(str, " \t\r\n\"'");
 }
@@ -225,6 +277,7 @@ std::string ImageView::resolve_icon_path(const std::string& icon_name) {
     std::string cache_key = user_theme + ":" + icon_name;
     {
         std::lock_guard<std::mutex> lock(s_cache_mutex);
+        ensure_icon_cache_loaded(user_theme);
         auto it = s_path_cache.find(cache_key);
         if (it != s_path_cache.end()) {
             return it->second;
@@ -354,6 +407,7 @@ std::string ImageView::resolve_icon_path(const std::string& icon_name) {
                 if (fs::exists(candidate) && !fs::is_directory(candidate)) {
                     std::lock_guard<std::mutex> lock(s_cache_mutex);
                     s_path_cache[cache_key] = candidate;
+                    persist_icon_cache_entry(user_theme, cache_key, candidate);
                     return candidate;
                 }
             }
@@ -375,14 +429,20 @@ std::string ImageView::resolve_icon_path(const std::string& icon_name) {
             for (const auto& ext : exts) {
                 std::string candidate = pdir + "/" + name_cand + ext;
                 if (fs::exists(candidate) && !fs::is_directory(candidate)) {
+                    std::lock_guard<std::mutex> lock(s_cache_mutex);
                     s_path_cache[cache_key] = candidate;
+                    persist_icon_cache_entry(user_theme, cache_key, candidate);
                     return candidate;
                 }
             }
         }
     }
 
-    s_path_cache[cache_key] = "";
+    {
+        std::lock_guard<std::mutex> lock(s_cache_mutex);
+        s_path_cache[cache_key] = "";
+        persist_icon_cache_entry(user_theme, cache_key, "");
+    }
     return "";
 }
 
@@ -700,12 +760,62 @@ static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w,
     if (use_disk_cache) {
         pixbuf = gdk_pixbuf_new_from_file(disk_cache_file.c_str(), &error);
     } else {
-        pixbuf = gdk_pixbuf_new_from_file_at_scale(file_to_decode.c_str(), req_w, req_h, preserve_aspect, &error);
-        if (pixbuf && !disk_cache_file.empty()) {
-            GError* save_err = nullptr;
-            gdk_pixbuf_save(pixbuf, disk_cache_file.c_str(), "png", &save_err, "compression", "1", nullptr);
-            if (save_err) g_error_free(save_err);
+        // Cold SVG decode: Asynchronously rasterize on ThreadPool without stalling the UI loop!
+        {
+            std::lock_guard<std::mutex> lock(s_pending_mutex);
+            if (s_pending_thumbnails.count(cache_key) == 0) {
+                s_pending_thumbnails.insert(cache_key);
+
+                ThreadPool::get().enqueue([file_to_decode, req_w, req_h, preserve_aspect, disk_cache_file, dim_alpha, cache_key]() {
+                    GError* err = nullptr;
+                    GdkPixbuf* pb = gdk_pixbuf_new_from_file_at_scale(file_to_decode.c_str(), req_w, req_h, preserve_aspect, &err);
+                    if (pb) {
+                        if (!disk_cache_file.empty()) {
+                            std::string tmp_file = disk_cache_file + ".tmp." + std::to_string(getpid()) + "." + std::to_string(rand());
+                            GError* save_err = nullptr;
+                            if (gdk_pixbuf_save(pb, tmp_file.c_str(), "png", &save_err, "compression", "1", nullptr)) {
+                                rename(tmp_file.c_str(), disk_cache_file.c_str());
+                            } else {
+                                unlink(tmp_file.c_str());
+                                if (save_err) g_error_free(save_err);
+                            }
+                        }
+                        cairo_surface_t* s = pixbuf_to_cairo_surface(pb);
+                        g_object_unref(pb);
+                        if (s && dim_alpha > 0.001f) {
+                            s = apply_dim(s, dim_alpha);
+                        }
+                        if (s) {
+                            std::lock_guard<std::mutex> clk(s_cache_mutex);
+                            if (s_surface_cache.size() >= MAX_SURFACE_CACHE_ENTRIES && !s_surface_lru.empty()) {
+                                auto oldest = s_surface_lru.back();
+                                s_surface_lru.pop_back();
+                                s_surface_cache.erase(oldest.first);
+                                if (oldest.second) cairo_surface_destroy(oldest.second);
+                            }
+                            s_surface_lru.push_front({cache_key, s});
+                            s_surface_cache[cache_key] = s_surface_lru.begin();
+                        }
+                    } else if (err) {
+                        g_error_free(err);
+                    }
+
+                    {
+                        std::lock_guard<std::mutex> plk(s_pending_mutex);
+                        s_pending_thumbnails.erase(cache_key);
+                    }
+
+                    if (AppEngine::instance()) {
+                        AppEngine::instance()->post([]() {
+                            if (AppEngine::instance()) {
+                                AppEngine::instance()->request_redraw_all();
+                            }
+                        });
+                    }
+                });
+            }
         }
+        return nullptr;
     }
 
     if (!pixbuf) {

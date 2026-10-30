@@ -64,9 +64,9 @@ void ImageButton::draw(cairo_t* cr, const Rect& bounds) {
         int ix = draw_x + (draw_w - icon_s) / 2;
         int iy = draw_y + (draw_h - icon_s) / 2;
 
-        ImageView temp_img(m_image_resource);
-        temp_img.set_target_size(icon_s);
-        temp_img.draw(cr, Rect(ix, iy, icon_s, icon_s));
+        m_image_view.set_image_resource(m_image_resource);
+        m_image_view.set_target_size(icon_s);
+        m_image_view.draw(cr, Rect(ix, iy, icon_s, icon_s));
     } else if (!m_icon.empty()) {
         std::string res_path = ImageView::resolve_icon_path(m_icon);
         bool is_img_icon = !res_path.empty() || m_icon.starts_with('/') || m_icon.ends_with(".png") || m_icon.ends_with(".svg");
@@ -75,9 +75,9 @@ void ImageButton::draw(cairo_t* cr, const Rect& bounds) {
             int ix = draw_x + (draw_w - icon_s) / 2;
             int iy = draw_y + (draw_h - icon_s) / 2;
 
-            ImageView temp_img(!res_path.empty() ? res_path : m_icon);
-            temp_img.set_target_size(icon_s);
-            temp_img.draw(cr, Rect(ix, iy, icon_s, icon_s));
+            m_image_view.set_image_resource(!res_path.empty() ? res_path : m_icon);
+            m_image_view.set_target_size(icon_s);
+            m_image_view.draw(cr, Rect(ix, iy, icon_s, icon_s));
         } else {
             Color fg = m_custom_icon_color ? m_icon_color : config->colors.on_surface;
             if (m_pressed) fg = config->colors.primary;

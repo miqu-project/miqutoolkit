@@ -2,11 +2,14 @@
 #include "miqutoolkit/core/window.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include "miqutoolkit/core/fs_utils.hpp"
+#include "miqutoolkit/core/thread_pool.hpp"
 #include "miqutoolkit/system/window_manager.hpp"
 #include "miqutoolkit/system/workspace_manager.hpp"
 #include "miqutoolkit/system/output_manager.hpp"
 #include "miqutoolkit/system/idle_manager.hpp"
 #include "miqutoolkit/view/image_view.hpp"
+#include <pango/pangocairo.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <iostream>
 #include <cstring>
 #include <algorithm>
@@ -82,6 +85,34 @@ std::shared_ptr<AppEngine> AppEngine::create() {
     }
 
     s_instance = engine.get();
+
+    // Pre-warm default font map, fontconfig, and gdk-pixbuf module loader concurrently in background
+    ThreadPool::get().enqueue([]() {
+        auto* fontmap = pango_cairo_font_map_get_default();
+        if (fontmap) {
+            auto* ctx = pango_font_map_create_context(fontmap);
+            if (ctx) {
+                auto* desc = pango_font_description_from_string("Sans 11");
+                auto* font = pango_font_map_load_font(fontmap, ctx, desc);
+                if (font) g_object_unref(font);
+                pango_font_description_free(desc);
+                g_object_unref(ctx);
+            }
+        }
+
+        // Force GdkPixbuf to initialize module loader table (e.g. libpixbufloader-png.so)
+        GSList* formats = gdk_pixbuf_get_formats();
+        if (formats) g_slist_free(formats);
+        GError* lerr = nullptr;
+        GdkPixbufLoader* loader = gdk_pixbuf_loader_new_with_type("png", &lerr);
+        if (loader) {
+            gdk_pixbuf_loader_close(loader, nullptr);
+            g_object_unref(loader);
+        } else if (lerr) {
+            g_error_free(lerr);
+        }
+    });
+
     return engine;
 }
 

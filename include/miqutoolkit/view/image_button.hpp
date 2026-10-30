@@ -1,6 +1,7 @@
 #pragma once
 
 #include "miqutoolkit/view/view.hpp"
+#include "miqutoolkit/view/image_view.hpp"
 #include <string>
 #include <functional>
 
@@ -58,6 +59,8 @@ private:
 
     bool m_hovered = false;
     bool m_pressed = false;
+
+    ImageView m_image_view;
 };
 
 class ImageButtonBuilder : public std::enable_shared_from_this<ImageButtonBuilder> {
