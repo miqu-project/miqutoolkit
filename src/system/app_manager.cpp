@@ -66,7 +66,7 @@ static std::string read_str(std::ifstream& in) {
 }
 
 static const uint32_t CACHE_MAGIC = 0x4D495155; // 'MIQU'
-static const uint32_t CACHE_VERSION = 3;
+static const uint32_t CACHE_VERSION = 4;
 
 static bool try_load_cache(const std::string& icon_theme, const std::vector<std::string>& dirs, std::vector<DesktopApp>& out_apps) {
     std::string path = get_app_cache_path(icon_theme);
@@ -290,7 +290,6 @@ void AppManager::rescan_internal() {
     }
 
     std::set<std::string> seen_ids;
-    std::set<std::string> seen_names;
 
     for (const auto& dir : dirs) {
         if (!fs::exists(dir)) continue;
@@ -347,11 +346,6 @@ void AppManager::rescan_internal() {
             if (no_display || name.empty() || exec.empty()) {
                 continue;
             }
-
-            if (seen_names.find(name) != seen_names.end()) {
-                continue;
-            }
-            seen_names.insert(name);
 
             // Pre-resolve icon path so ImageView doesn't need to search disk directories on startup
             std::string resolved_icon;
