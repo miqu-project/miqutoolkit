@@ -293,6 +293,7 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
     .leave = [](void* data, struct wl_keyboard*, uint32_t, struct wl_surface*) {
         auto* self = static_cast<Window*>(data);
         if (!self) return;
+        self->stop_key_repeat();
         auto keep_alive = self->shared_from_this();
         if (self->m_has_keyboard_focus) {
             self->m_has_keyboard_focus = false;
@@ -307,58 +308,11 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
     },
     .key = [](void* data, struct wl_keyboard*, uint32_t, uint32_t, uint32_t key, uint32_t state) {
         auto* self = static_cast<Window*>(data);
-        if (!self || !self->m_xkb_state) return;
+        if (!self) return;
         auto keep_alive = self->shared_from_this();
-
         uint32_t keycode = key + 8;
-        xkb_keysym_t sym = xkb_state_key_get_one_sym(self->m_xkb_state, keycode);
         bool pressed = (state == WL_KEYBOARD_KEY_STATE_PRESSED);
-
-        char utf8_buf[64] = {0};
-        xkb_state_key_get_utf8(self->m_xkb_state, keycode, utf8_buf, sizeof(utf8_buf));
-
-        KeyPressEvent event;
-        event.keysym = sym;
-        event.raw_code = keycode;
-        event.utf8_text = utf8_buf;
-        event.pressed = pressed;
-        event.modifiers = self->m_modifiers;
-
-        if (self->m_popup_view) {
-            if (self->m_popup_view->on_key(event)) {
-                self->schedule_redraw();
-                return;
-            }
-            if (pressed && sym == XKB_KEY_Escape) {
-                if (!self->m_active_popup || self->m_active_popup->is_dismiss_on_escape()) {
-                    self->dismiss_popup();
-                    return;
-                }
-            }
-        }
-
-        if (pressed && self->m_close_on_escape && sym == XKB_KEY_Escape) {
-            if (self->m_on_close) self->m_on_close();
-            self->close();
-            return;
-        }
-
-        if (self->m_on_key) {
-            self->m_on_key(event);
-        }
-
-        if (self->m_focused_view) {
-            if (self->m_focused_view->on_key(event)) {
-                self->schedule_redraw();
-                return;
-            }
-        }
-
-        if (self->m_root_view) {
-            if (self->m_root_view->on_key(event)) {
-                self->schedule_redraw();
-            }
-        }
+        self->handle_key_event(keycode, pressed);
     },
     .modifiers = [](void* data, struct wl_keyboard*, uint32_t serial, uint32_t mods_depressed, uint32_t mods_latched, uint32_t mods_locked, uint32_t group) {
         auto* self = static_cast<Window*>(data);
@@ -372,7 +326,12 @@ const struct wl_keyboard_listener Window::s_keyboard_listener = {
             if (xkb_state_mod_name_is_active(self->m_xkb_state, XKB_MOD_NAME_LOGO, XKB_STATE_MODS_EFFECTIVE) > 0) self->m_modifiers |= static_cast<uint32_t>(KeyboardModifier::Super);
         }
     },
-    .repeat_info = [](void*, struct wl_keyboard*, int32_t, int32_t) {}
+    .repeat_info = [](void* data, struct wl_keyboard*, int32_t rate, int32_t delay) {
+        auto* self = static_cast<Window*>(data);
+        if (!self) return;
+        self->m_repeat_rate = rate;
+        self->m_repeat_delay = delay;
+    }
 };
 
 const struct wl_touch_listener Window::s_touch_listener = {
@@ -910,6 +869,7 @@ void Window::dismiss_tooltip_overlay() {
 }
 
 void Window::close() {
+    stop_key_repeat();
     std::shared_ptr<Window> keep_alive;
     try {
         keep_alive = shared_from_this();
@@ -1075,6 +1035,113 @@ void Window::set_focused_view(View* view) {
 
 void Window::clear_focus() {
     set_focused_view(nullptr);
+}
+
+void Window::dispatch_key_event(const KeyPressEvent& event) {
+    if (m_popup_view) {
+        if (m_popup_view->on_key(event)) {
+            schedule_redraw();
+            return;
+        }
+        if (event.pressed && event.keysym == XKB_KEY_Escape) {
+            if (!m_active_popup || m_active_popup->is_dismiss_on_escape()) {
+                dismiss_popup();
+                return;
+            }
+        }
+    }
+
+    if (event.pressed && m_close_on_escape && event.keysym == XKB_KEY_Escape) {
+        if (m_on_close) m_on_close();
+        close();
+        return;
+    }
+
+    if (m_on_key) {
+        m_on_key(event);
+    }
+
+    if (m_focused_view) {
+        if (m_focused_view->on_key(event)) {
+            schedule_redraw();
+            return;
+        }
+    }
+
+    if (m_root_view) {
+        if (m_root_view->on_key(event)) {
+            schedule_redraw();
+        }
+    }
+}
+
+void Window::stop_key_repeat() {
+    auto* engine = AppEngine::instance();
+    if (m_repeat_delay_timer_id != 0) {
+        if (engine) engine->cancel_delayed(m_repeat_delay_timer_id);
+        m_repeat_delay_timer_id = 0;
+    }
+    if (m_repeat_interval_timer_id != 0) {
+        if (engine) engine->cancel_timer(m_repeat_interval_timer_id);
+        m_repeat_interval_timer_id = 0;
+    }
+    m_repeat_keycode = 0;
+}
+
+void Window::handle_key_event(uint32_t keycode, bool pressed) {
+    if (!m_xkb_state) return;
+
+    xkb_keysym_t sym = xkb_state_key_get_one_sym(m_xkb_state, keycode);
+    char utf8_buf[64] = {0};
+    xkb_state_key_get_utf8(m_xkb_state, keycode, utf8_buf, sizeof(utf8_buf));
+
+    KeyPressEvent event;
+    event.keysym = sym;
+    event.raw_code = keycode;
+    event.utf8_text = utf8_buf;
+    event.pressed = pressed;
+    event.modifiers = m_modifiers;
+
+    if (pressed) {
+        dispatch_key_event(event);
+
+        bool can_repeat = (m_repeat_rate > 0 && m_repeat_delay > 0);
+        if (can_repeat && m_xkb_keymap) {
+            can_repeat = (xkb_keymap_key_repeats(m_xkb_keymap, keycode) != 0);
+        }
+
+        if (can_repeat) {
+            stop_key_repeat();
+            m_repeat_keycode = keycode;
+            m_repeat_event = event;
+
+            int interval_ms = (m_repeat_rate > 0) ? std::max(10, 1000 / m_repeat_rate) : 40;
+            auto* engine = AppEngine::instance();
+            if (engine) {
+                m_repeat_delay_timer_id = engine->post_delayed(m_repeat_delay, [this, interval_ms]() {
+                    m_repeat_delay_timer_id = 0;
+                    if (m_repeat_keycode == 0) return;
+
+                    dispatch_key_event(m_repeat_event);
+
+                    auto* eng = AppEngine::instance();
+                    if (!eng) return;
+                    m_repeat_interval_timer_id = eng->add_repeating_timer(interval_ms, [this]() {
+                        if (m_repeat_keycode == 0) {
+                            stop_key_repeat();
+                            return;
+                        }
+                        dispatch_key_event(m_repeat_event);
+                    });
+                });
+            }
+        }
+    } else {
+        if (keycode == m_repeat_keycode) {
+            stop_key_repeat();
+        }
+        dispatch_key_event(event);
+    }
 }
 
 } // namespace miqu

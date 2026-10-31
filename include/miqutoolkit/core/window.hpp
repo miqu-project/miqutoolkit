@@ -203,6 +203,17 @@ private:
 
     double m_last_x = 0;
     double m_last_y = 0;
+
+    void handle_key_event(uint32_t keycode, bool pressed);
+    void dispatch_key_event(const KeyPressEvent& event);
+    void stop_key_repeat();
+
+    int32_t m_repeat_rate = 25;
+    int32_t m_repeat_delay = 400;
+    uint32_t m_repeat_keycode = 0;
+    uint64_t m_repeat_delay_timer_id = 0;
+    uint64_t m_repeat_interval_timer_id = 0;
+    KeyPressEvent m_repeat_event;
 };
 
 class WindowBuilder : public std::enable_shared_from_this<WindowBuilder> {
