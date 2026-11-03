@@ -744,7 +744,20 @@ static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w,
     }
 
     // Fast disk cache for rendered SVGs / icons (only for clean un-dimmed icons)
-    std::string disk_cache_file = (dim_alpha <= 0.001f) ? get_rendered_icon_file(cache_key) : "";
+    bool is_svg = false;
+    {
+        std::string lower = file_to_decode;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) {
+            return std::tolower(c);
+        });
+        if (lower.length() >= 4 && lower.substr(lower.length() - 4) == ".svg") {
+            is_svg = true;
+        }
+    }
+    bool is_small_icon = (req_w <= 256 && req_h <= 256);
+    bool should_disk_cache = (is_svg || is_small_icon) && (dim_alpha <= 0.001f);
+
+    std::string disk_cache_file = should_disk_cache ? get_rendered_icon_file(cache_key) : "";
     bool use_disk_cache = false;
     if (!disk_cache_file.empty() && fs::exists(disk_cache_file)) {
         std::error_code dec, oec;
@@ -759,8 +772,11 @@ static cairo_surface_t* load_surface(const std::string& path_or_name, int box_w,
     GdkPixbuf* pixbuf = nullptr;
     if (use_disk_cache) {
         pixbuf = gdk_pixbuf_new_from_file(disk_cache_file.c_str(), &error);
+    } else if (quality == ImageQuality::FullOriginal) {
+        // Media viewer & full photos (miqugallery, wallpapers): decode synchronously from disk for instant frame 0 display
+        pixbuf = gdk_pixbuf_new_from_file_at_scale(file_to_decode.c_str(), req_w, req_h, preserve_aspect, &error);
     } else {
-        // Cold SVG decode: Asynchronously rasterize on ThreadPool without stalling the UI loop!
+        // Cold SVG & icon decodes for launchers/grids: Asynchronously rasterize on ThreadPool without stalling the UI loop!
         {
             std::lock_guard<std::mutex> lock(s_pending_mutex);
             if (s_pending_thumbnails.count(cache_key) == 0) {
@@ -932,9 +948,9 @@ void ImageView::draw(cairo_t* cr, const Rect& bounds) {
         std::abs(m_cached_dim_alpha - m_dim_alpha) < 0.001f) {
         surf = m_cached_surface;
     } else {
-        invalidate_surface_cache();
         cairo_surface_t* loaded = load_surface(m_source, draw_w, draw_h, m_fit_mode, m_target_size, m_quality, m_dim_alpha);
         if (loaded) {
+            invalidate_surface_cache();
             m_cached_surface = cairo_surface_reference(loaded);
             m_cached_w = draw_w;
             m_cached_h = draw_h;
@@ -944,6 +960,11 @@ void ImageView::draw(cairo_t* cr, const Rect& bounds) {
             m_cached_target_size = m_target_size;
             m_cached_dim_alpha = m_dim_alpha;
             surf = m_cached_surface;
+        } else if (m_cached_surface && m_cached_source == m_source) {
+            // Retain previous surface during in-flight resize or asynchronous reload
+            surf = m_cached_surface;
+        } else {
+            invalidate_surface_cache();
         }
     }
 
@@ -1021,14 +1042,47 @@ void ImageView::draw(cairo_t* cr, const Rect& bounds) {
         int surf_w = cairo_image_surface_get_width(surf);
         int surf_h = cairo_image_surface_get_height(surf);
 
-        double img_x = draw_x + (draw_w - surf_w) / 2.0;
-        double img_y = draw_y + (draw_h - surf_h) / 2.0;
+        if (surf_w == draw_w && surf_h == draw_h) {
+            double img_x = draw_x + (draw_w - surf_w) / 2.0;
+            double img_y = draw_y + (draw_h - surf_h) / 2.0;
 
-        cairo_set_source_surface(cr, surf, img_x, img_y);
-        if (m_opacity < 1.0f) {
-            cairo_paint_with_alpha(cr, m_opacity);
-        } else {
-            cairo_paint(cr);
+            cairo_set_source_surface(cr, surf, img_x, img_y);
+            if (m_opacity < 1.0f) {
+                cairo_paint_with_alpha(cr, m_opacity);
+            } else {
+                cairo_paint(cr);
+            }
+        } else if (surf_w > 0 && surf_h > 0) {
+            double scale_x = static_cast<double>(draw_w) / surf_w;
+            double scale_y = static_cast<double>(draw_h) / surf_h;
+            if (m_fit_mode == FitMode::Contain) {
+                double s = std::min(scale_x, scale_y);
+                scale_x = s;
+                scale_y = s;
+            } else if (m_fit_mode == FitMode::Cover) {
+                double s = std::max(scale_x, scale_y);
+                scale_x = s;
+                scale_y = s;
+            } else if (m_fit_mode == FitMode::Center) {
+                scale_x = 1.0;
+                scale_y = 1.0;
+            }
+            double scaled_w = surf_w * scale_x;
+            double scaled_h = surf_h * scale_y;
+            double img_x = draw_x + (draw_w - scaled_w) / 2.0;
+            double img_y = draw_y + (draw_h - scaled_h) / 2.0;
+
+            cairo_save(cr);
+            cairo_translate(cr, img_x, img_y);
+            cairo_scale(cr, scale_x, scale_y);
+            cairo_set_source_surface(cr, surf, 0, 0);
+            cairo_pattern_set_filter(cairo_get_source(cr), CAIRO_FILTER_BILINEAR);
+            if (m_opacity < 1.0f) {
+                cairo_paint_with_alpha(cr, m_opacity);
+            } else {
+                cairo_paint(cr);
+            }
+            cairo_restore(cr);
         }
     }
     cairo_restore(cr);

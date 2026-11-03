@@ -32,6 +32,14 @@ public:
     std::shared_ptr<View> get_item_at(size_t index) const;
 
     // Selection
+    void set_selectable(bool selectable) {
+        m_selectable = selectable;
+        if (!m_selectable) {
+            m_selected_index = -1;
+        }
+    }
+    bool is_selectable() const { return m_selectable; }
+
     void set_selected_index(int index);
     int get_selected_index() const { return m_selected_index; }
     std::shared_ptr<View> get_selected_item() const;
@@ -57,6 +65,7 @@ private:
     int m_corner_radius = 6;
     bool m_show_dividers = false;
 
+    bool m_selectable = true;
     int m_selected_index = -1;
     int m_hovered_index = -1;
 
@@ -67,6 +76,7 @@ private:
     bool m_touch_scrolling = false;
     double m_scroll_y = 0.0;
     mutable int m_last_height = 0;
+    bool m_scroll_to_selected = false;
 
     std::vector<std::shared_ptr<View>> m_items;
     std::function<void(size_t, std::shared_ptr<View>)> m_on_item_click;
@@ -97,6 +107,11 @@ public:
 
     std::shared_ptr<ListViewBuilder> showDividers(bool show) {
         m_view->set_show_dividers(show);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ListViewBuilder> selectable(bool selectable) {
+        m_view->set_selectable(selectable);
         return shared_from_this();
     }
 

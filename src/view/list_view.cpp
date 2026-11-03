@@ -12,14 +12,14 @@ ListView::ListView() {}
 
 void ListView::set_items(std::vector<std::shared_ptr<View>> items) {
     m_items = std::move(items);
-    m_selected_index = m_items.empty() ? -1 : 0;
+    m_selected_index = (!m_selectable || m_items.empty()) ? -1 : 0;
     m_scroll_y = 0.0;
 }
 
 void ListView::add_item(std::shared_ptr<View> item) {
     if (item) {
         m_items.push_back(std::move(item));
-        if (m_selected_index < 0 && !m_items.empty()) {
+        if (m_selectable && m_selected_index < 0 && !m_items.empty()) {
             m_selected_index = 0;
         }
     }
@@ -40,14 +40,18 @@ std::shared_ptr<View> ListView::get_item_at(size_t index) const {
 }
 
 void ListView::set_selected_index(int index) {
-    if (m_items.empty()) {
+    if (!m_selectable || m_items.empty() || index < 0) {
         m_selected_index = -1;
+        request_redraw();
         return;
     }
     m_selected_index = std::clamp(index, 0, static_cast<int>(m_items.size()) - 1);
     if (m_last_height > 0) {
         ensure_visible(m_last_height);
+    } else {
+        m_scroll_to_selected = true;
     }
+    request_redraw();
 }
 
 std::shared_ptr<View> ListView::get_selected_item() const {
@@ -58,7 +62,7 @@ std::shared_ptr<View> ListView::get_selected_item() const {
 }
 
 void ListView::ensure_visible(int viewport_height) {
-    if (m_selected_index < 0 || viewport_height <= 0) return;
+    if (m_selected_index < 0 || viewport_height <= 0 || m_items.empty()) return;
 
     int row_stride = m_item_h + m_spacing;
     double item_top = m_selected_index * row_stride;
@@ -109,6 +113,11 @@ void ListView::draw(cairo_t* cr, const Rect& bounds) {
     double content_h = std::max(0, static_cast<int>(m_items.size()) * row_stride - m_spacing);
     double max_scroll = std::max(0.0, content_h - bounds.height);
 
+    if (m_scroll_to_selected) {
+        ensure_visible(bounds.height);
+        m_scroll_to_selected = false;
+    }
+
     m_scroll_y = std::clamp(m_scroll_y, 0.0, max_scroll);
 
     cairo_save(cr);
@@ -124,7 +133,7 @@ void ListView::draw(cairo_t* cr, const Rect& bounds) {
         int item_y = bounds.y + i * row_stride - static_cast<int>(m_scroll_y);
         Rect item_rect(bounds.x, item_y, bounds.width, m_item_h);
 
-        bool is_selected = (i == m_selected_index);
+        bool is_selected = (m_selectable && i == m_selected_index);
         bool is_hovered = (i == m_hovered_index && !is_selected);
 
         // Highlight background
@@ -145,10 +154,10 @@ void ListView::draw(cairo_t* cr, const Rect& bounds) {
             cairo_stroke(cr);
         } else if (is_hovered) {
             CardView::draw_rounded_rect(cr, item_rect.x, item_rect.y, item_rect.width, item_rect.height, radius);
-            cairo_set_source_rgba(cr, config->colors.surface_variant.r,
-                                      config->colors.surface_variant.g,
-                                      config->colors.surface_variant.b,
-                                      0.45f);
+            cairo_set_source_rgba(cr, config->colors.on_surface.r,
+                                      config->colors.on_surface.g,
+                                      config->colors.on_surface.b,
+                                      0.08f);
             cairo_fill(cr);
         }
 
@@ -206,7 +215,9 @@ bool ListView::on_mouse_button(int lx, int ly, MouseButton button, bool pressed,
     if (button == MouseButton::Left && pressed) {
         int idx = item_at(lx, ly, bounds);
         if (idx >= 0 && idx < static_cast<int>(m_items.size())) {
-            m_selected_index = idx;
+            if (m_selectable) {
+                m_selected_index = idx;
+            }
             if (m_on_item_click) {
                 m_on_item_click(idx, m_items[idx]);
             }
@@ -231,7 +242,7 @@ bool ListView::on_scroll(double delta) {
 }
 
 bool ListView::on_key(const KeyPressEvent& event) {
-    if (m_items.empty()) return false;
+    if (!m_selectable || m_items.empty()) return false;
 
     int count = static_cast<int>(m_items.size());
     int old_selected = m_selected_index;
@@ -356,7 +367,9 @@ bool ListView::on_touch(const TouchEvent& event, const Rect& bounds) {
         m_touch_scrolling = false;
         int idx = item_at(static_cast<int>(event.x), static_cast<int>(event.y), bounds);
         if (idx >= 0 && idx < static_cast<int>(m_items.size())) {
-            m_selected_index = idx;
+            if (m_selectable) {
+                m_selected_index = idx;
+            }
             m_hovered_index = idx;
             if (m_on_item_click) {
                 m_on_item_click(idx, m_items[idx]);
