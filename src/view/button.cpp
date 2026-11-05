@@ -272,9 +272,11 @@ bool Button::on_mouse_move(int lx, int ly, const Rect& bounds) {
 }
 
 bool Button::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
-    if (button != MouseButton::Left) return false;
-
     bool contains = bounds.contains(Point(lx, ly));
+    if (button == MouseButton::Right && pressed && contains) {
+        if (handle_context_click(lx, ly, bounds)) return true;
+    }
+    if (button != MouseButton::Left) return false;
     if (pressed) {
         if (contains) {
             m_pressed = true;

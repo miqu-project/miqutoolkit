@@ -12,6 +12,7 @@
 namespace miqu {
 
 class Window;
+class PopupMenu;
 
 enum class Visibility {
     Visible,
@@ -37,7 +38,13 @@ public:
     }
 
     virtual bool on_mouse_move(int lx, int ly, const Rect& bounds) { return false; }
-    virtual bool on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) { return false; }
+    virtual bool on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
+        if (!is_visible() || !bounds.contains(Point(lx, ly))) return false;
+        if (button == MouseButton::Right && pressed) {
+            return handle_context_click(lx, ly, bounds);
+        }
+        return false;
+    }
     virtual bool on_key(const KeyPressEvent& event) { return false; }
     virtual bool on_scroll(double delta) { return false; }
     virtual bool on_touch(const TouchEvent& event, const Rect& bounds) {
@@ -100,6 +107,23 @@ public:
     // Click Listener
     void set_on_click_listener(std::function<void()> listener) { m_on_click = std::move(listener); }
 
+    // Context Click & Context Menu
+    void set_on_context_click_listener(std::function<void(int global_x, int global_y)> listener) {
+        m_on_context_click = std::move(listener);
+    }
+    View* onContextClick(std::function<void(int global_x, int global_y)> listener) {
+        m_on_context_click = std::move(listener);
+        return this;
+    }
+
+    void set_context_menu(std::shared_ptr<PopupMenu> menu);
+    View* contextMenu(std::shared_ptr<PopupMenu> menu);
+
+    void set_context_menu_builder(std::function<std::shared_ptr<PopupMenu>(int x, int y)> builder);
+    View* contextMenuBuilder(std::function<std::shared_ptr<PopupMenu>(int x, int y)> builder);
+
+    virtual bool handle_context_click(int lx, int ly, const Rect& bounds);
+
     // Window Reference
     virtual void set_window(Window* win) { m_window = win; }
     Window* get_window() const { return m_window; }
@@ -130,6 +154,10 @@ protected:
     Visibility m_visibility = Visibility::Visible;
     Window* m_window = nullptr;
     std::function<void()> m_on_click;
+    std::function<void(int, int)> m_on_context_click;
+    std::shared_ptr<PopupMenu> m_context_menu;
+    std::function<std::shared_ptr<PopupMenu>(int, int)> m_context_menu_builder;
+    std::shared_ptr<PopupMenu> m_active_context_menu;
     std::string m_tooltip;
     std::string m_tooltip_shortcut;
 };

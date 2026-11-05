@@ -98,6 +98,7 @@ public:
 
     void set_on_close(std::function<void()> cb) { m_on_close = std::move(cb); }
     void set_on_key(std::function<void(const KeyPressEvent&)> cb) { m_on_key = std::move(cb); }
+    void set_on_context_click_listener(std::function<void(int x, int y)> cb) { m_on_context_click = std::move(cb); }
     void set_on_keyboard_enter(std::function<void()> cb) { m_on_keyboard_enter = std::move(cb); }
     void set_on_keyboard_leave(std::function<void()> cb) { m_on_keyboard_leave = std::move(cb); }
 
@@ -198,6 +199,7 @@ private:
 
     std::function<void()> m_on_close;
     std::function<void(const KeyPressEvent&)> m_on_key;
+    std::function<void(int x, int y)> m_on_context_click;
     std::function<void()> m_on_keyboard_enter;
     std::function<void()> m_on_keyboard_leave;
 
@@ -321,6 +323,11 @@ public:
 
     std::shared_ptr<WindowBuilder> onKey(std::function<void(const KeyPressEvent&)> cb) {
         m_window->set_on_key(std::move(cb));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<WindowBuilder> onContextClick(std::function<void(int x, int y)> cb) {
+        m_window->set_on_context_click_listener(std::move(cb));
         return shared_from_this();
     }
 

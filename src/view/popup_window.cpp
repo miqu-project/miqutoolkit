@@ -49,11 +49,14 @@ public:
         }
 
         // 2. Background fill
-        cairo_save(cr);
-        draw_rounded_rect(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius);
-        cairo_set_source_rgba(cr, bg.r, bg.g, bg.b, bg.a);
-        cairo_fill(cr);
-        cairo_restore(cr);
+        bool child_is_card = (!m_children.empty() && dynamic_cast<CardView*>(m_children[0].get()) != nullptr);
+        if (!child_is_card) {
+            cairo_save(cr);
+            draw_rounded_rect(cr, bounds.x, bounds.y, bounds.width, bounds.height, radius);
+            cairo_set_source_rgba(cr, bg.r, bg.g, bg.b, bg.a);
+            cairo_fill(cr);
+            cairo_restore(cr);
+        }
 
         // 3. Child content clipping and drawing
         bool clip_corners = (radius > 0);
@@ -70,7 +73,7 @@ public:
         }
 
         // 4. Subtle outline border stroke on top of content
-        if (stroke_w > 0.0 && stroke_col.a > 0.0f) {
+        if (!child_is_card && stroke_w > 0.0 && stroke_col.a > 0.0f) {
             cairo_save(cr);
             double offset = stroke_w / 2.0;
             double r = std::max(0.0, static_cast<double>(radius) - offset);
@@ -93,6 +96,16 @@ private:
 };
 
 } // anonymous namespace
+
+std::shared_ptr<PopupWindow> PopupWindow::s_active_popup = nullptr;
+
+void PopupWindow::dismiss_all_active() {
+    if (s_active_popup) {
+        auto p = s_active_popup;
+        s_active_popup = nullptr;
+        p->dismiss();
+    }
+}
 
 PopupWindow::PopupWindow() = default;
 
@@ -226,7 +239,7 @@ Size PopupWindow::measure_popup_size(Window* window, const Rect& anchor_rect) co
     if (m_max_width > 0 && w > m_max_width) w = m_max_width;
     if (m_max_height > 0 && h > m_max_height) h = m_max_height;
 
-    if (window) {
+    if (window && window->get_role() == WindowRole::Toplevel) {
         int max_win_w = std::max(60, window->get_width() - (m_window_margin * 2));
         int max_win_h = std::max(40, window->get_height() - (m_window_margin * 2));
         w = std::min(w, max_win_w);
@@ -395,6 +408,76 @@ void PopupWindow::show_as_dropdown(View* anchor,
     Window* win = anchor->get_window();
     if (!win) return;
 
+    if (s_active_popup && s_active_popup.get() != this) {
+        s_active_popup->dismiss();
+    }
+
+    // When the anchor is hosted in a Layer surface (e.g. top/bottom bar),
+    // popup must be rendered in its own dedicated LayerOverlay surface
+    if (win->get_role() == WindowRole::LayerTop || win->get_role() == WindowRole::LayerBottom) {
+        ensure_container_view();
+        if (auto* c = dynamic_cast<PopupContainerView*>(m_container_view.get())) {
+            c->set_elevation_level(0.0);
+        }
+
+        Rect anchor_rect = anchor->get_bounds();
+        if (anchor_rect.width <= 0 || anchor_rect.height <= 0) {
+            Size measured = anchor->measure_size();
+            if (anchor_rect.width <= 0) anchor_rect.width = std::max(measured.width, 20);
+            if (anchor_rect.height <= 0) anchor_rect.height = std::max(measured.height, 20);
+        }
+        Size popup_size = measure_popup_size(win, anchor_rect);
+
+        bool is_top = (win->get_anchors() & 1) && !(win->get_anchors() & 2);
+        bool is_bottom = (win->get_anchors() & 2) && !(win->get_anchors() & 1);
+        if (!is_top && !is_bottom) {
+            is_top = (win->get_role() == WindowRole::LayerTop);
+        }
+        uint32_t layer_anchors = (is_top ? 1 : 2); // 1 = Top, 2 = Bottom
+        Margin margin;
+
+        int dist_from_right = win->get_width() - (anchor_rect.x + anchor_rect.width);
+        if (dist_from_right < win->get_width() / 2) {
+            layer_anchors |= 8; // Right
+            margin.right = std::max(0, dist_from_right + x_offset);
+        } else {
+            layer_anchors |= 4; // Left
+            margin.left = std::max(0, anchor_rect.x + x_offset);
+        }
+
+        if (is_top) {
+            margin.top = win->get_height() + 8 + y_offset;
+        } else {
+            margin.bottom = win->get_height() + 8 + y_offset;
+        }
+
+        std::string ns = m_layer_namespace.empty() ? "miqu-popup" : m_layer_namespace;
+        m_layer_window = WindowBuilder::create()
+            ->role(WindowRole::LayerOverlay)
+            ->layerNamespace(ns)
+            ->anchors(layer_anchors)
+            ->preferredSize(popup_size.width, popup_size.height)
+            ->contentSize(popup_size.width, popup_size.height)
+            ->contentMargin(margin)
+            ->transparent(true)
+            ->exclusiveZone(-1)
+            ->closeOnClickOutside(m_dismiss_on_outside)
+            ->closeOnEscape(m_dismiss_on_escape)
+            ->contentView(m_container_view)
+            ->onClose([this]() {
+                m_layer_window = nullptr;
+                if (s_active_popup.get() == this) s_active_popup = nullptr;
+                notify_dismissed();
+            })
+            ->build();
+
+        m_is_showing = true;
+        m_window = win;
+        s_active_popup = shared_from_this();
+        if (m_layer_window) m_layer_window->show();
+        return;
+    }
+
     ensure_container_view();
 
     Rect anchor_rect = anchor->get_bounds();
@@ -419,12 +502,73 @@ void PopupWindow::show_as_dropdown(View* anchor,
     m_bounds = calculated;
     m_window = win;
     m_is_showing = true;
+    s_active_popup = shared_from_this();
 
     m_window->show_popup(shared_from_this());
 }
 
 void PopupWindow::show_at_location(Window* window, int x, int y, Gravity gravity) {
     if (!window) return;
+
+    if (s_active_popup && s_active_popup.get() != this) {
+        s_active_popup->dismiss();
+    }
+
+    if (window->get_role() != WindowRole::Toplevel) {
+        ensure_container_view();
+        if (auto* c = dynamic_cast<PopupContainerView*>(m_container_view.get())) {
+            c->set_elevation_level(0.0);
+        }
+
+        Size win_size(window->get_width(), window->get_height());
+        Rect anchor_dummy(x, y, 0, 0);
+        Size popup_size = measure_popup_size(window, anchor_dummy);
+
+        uint32_t layer_anchors = 1 | 4; // Top | Left
+        Margin margin;
+        margin.top = y;
+        margin.left = x;
+
+        // Auto flip / clamp horizontally
+        if (win_size.width > 0 && x + popup_size.width > win_size.width - m_window_margin) {
+            layer_anchors = (layer_anchors & ~4) | 8; // Anchor to Right
+            margin.right = std::max(m_window_margin, win_size.width - x);
+            margin.left = 0;
+        }
+
+        // Auto flip / clamp vertically
+        if (win_size.height > 0 && y + popup_size.height > win_size.height - m_window_margin) {
+            layer_anchors = (layer_anchors & ~1) | 2; // Anchor to Bottom
+            margin.bottom = std::max(m_window_margin, win_size.height - y);
+            margin.top = 0;
+        }
+
+        std::string ns = m_layer_namespace.empty() ? "miqu-popup" : m_layer_namespace;
+        m_layer_window = WindowBuilder::create()
+            ->role(WindowRole::LayerOverlay)
+            ->layerNamespace(ns)
+            ->anchors(layer_anchors)
+            ->preferredSize(popup_size.width, popup_size.height)
+            ->contentSize(popup_size.width, popup_size.height)
+            ->contentMargin(margin)
+            ->transparent(true)
+            ->exclusiveZone(-1)
+            ->closeOnClickOutside(m_dismiss_on_outside)
+            ->closeOnEscape(m_dismiss_on_escape)
+            ->contentView(m_container_view)
+            ->onClose([this]() {
+                m_layer_window = nullptr;
+                if (s_active_popup.get() == this) s_active_popup = nullptr;
+                notify_dismissed();
+            })
+            ->build();
+
+        m_is_showing = true;
+        m_window = window;
+        s_active_popup = shared_from_this();
+        if (m_layer_window) m_layer_window->show();
+        return;
+    }
 
     ensure_container_view();
 
@@ -455,6 +599,7 @@ void PopupWindow::show_at_location(Window* window, int x, int y, Gravity gravity
     m_bounds = calculated;
     m_window = window;
     m_is_showing = true;
+    s_active_popup = shared_from_this();
 
     m_window->show_popup(shared_from_this());
 }
@@ -462,6 +607,17 @@ void PopupWindow::show_at_location(Window* window, int x, int y, Gravity gravity
 void PopupWindow::dismiss() {
     if (!m_is_showing) return;
     m_is_showing = false;
+
+    if (s_active_popup.get() == this) {
+        s_active_popup = nullptr;
+    }
+
+    if (m_layer_window) {
+        auto win = m_layer_window;
+        m_layer_window = nullptr;
+        win->close();
+    }
+
     if (m_container_view) {
         if (auto* c = dynamic_cast<PopupContainerView*>(m_container_view.get())) {
             c->clear_views();
@@ -598,6 +754,11 @@ std::shared_ptr<PopupWindowBuilder> PopupWindowBuilder::autoClamp(bool clamp) {
 
 std::shared_ptr<PopupWindowBuilder> PopupWindowBuilder::windowMargin(int margin) {
     m_popup->set_window_margin(margin);
+    return shared_from_this();
+}
+
+std::shared_ptr<PopupWindowBuilder> PopupWindowBuilder::layerNamespace(std::string ns) {
+    m_popup->set_layer_namespace(std::move(ns));
     return shared_from_this();
 }
 

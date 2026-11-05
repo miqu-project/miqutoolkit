@@ -134,6 +134,7 @@ public:
     bool is_dismiss_on_select() const { return m_dismiss_on_select; }
 
     void set_on_dismiss(std::function<void()> listener) { m_on_dismiss = std::move(listener); }
+    const std::function<void()>& get_on_dismiss() const { return m_on_dismiss; }
 
     // Presentation API
     void show_as_dropdown(const std::shared_ptr<View>& anchor,
@@ -163,6 +164,7 @@ private:
 
     std::shared_ptr<PopupWindow> m_popup_window;
     std::shared_ptr<View> m_menu_view;
+    std::shared_ptr<PopupMenu> m_self_ref;
 };
 
 using ActionMenu = PopupMenu;

@@ -98,6 +98,10 @@ public:
 
     void set_on_dismiss_listener(std::function<void()> listener) { m_on_dismiss = std::move(listener); }
 
+    // Layer Shell Integration
+    void set_layer_namespace(std::string ns) { m_layer_namespace = std::move(ns); }
+    const std::string& get_layer_namespace() const { return m_layer_namespace; }
+
     // Presentation API
     void show_as_dropdown(const std::shared_ptr<View>& anchor,
                           PopupGravity gravity = PopupGravity::BottomStart,
@@ -109,6 +113,8 @@ public:
                           Gravity gravity = Gravity::None);
     void dismiss();
     bool is_showing() const { return m_is_showing; }
+
+    static void dismiss_all_active();
 
     // Target geometry in window coordinates
     const Rect& get_bounds() const { return m_bounds; }
@@ -160,7 +166,10 @@ private:
 
     bool m_is_showing = false;
     Rect m_bounds;
+    std::string m_layer_namespace = "miqu-popup";
     std::function<void()> m_on_dismiss;
+    std::shared_ptr<Window> m_layer_window;
+    static std::shared_ptr<PopupWindow> s_active_popup;
 };
 
 /**
@@ -188,6 +197,7 @@ public:
     std::shared_ptr<PopupWindowBuilder> padding(int h, int v);
     std::shared_ptr<PopupWindowBuilder> padding(int l, int t, int r, int b);
 
+    std::shared_ptr<PopupWindowBuilder> layerNamespace(std::string ns);
     std::shared_ptr<PopupWindowBuilder> dismissOnOutsideClick(bool dismiss);
     std::shared_ptr<PopupWindowBuilder> dismissOnEscape(bool dismiss);
     std::shared_ptr<PopupWindowBuilder> autoFlip(bool flip);

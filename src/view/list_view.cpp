@@ -223,6 +223,23 @@ bool ListView::on_mouse_button(int lx, int ly, MouseButton button, bool pressed,
             }
             return true;
         }
+    } else if (button == MouseButton::Right && pressed) {
+        int idx = item_at(lx, ly, bounds);
+        if (idx >= 0 && idx < static_cast<int>(m_items.size())) {
+            if (m_selectable) {
+                m_selected_index = idx;
+            }
+            if (m_on_item_context_click) {
+                m_on_item_context_click(idx, m_items[idx], lx, ly);
+                return true;
+            }
+        } else if (m_on_empty_context_click) {
+            m_on_empty_context_click(lx, ly);
+            return true;
+        }
+        if (handle_context_click(lx, ly, bounds)) {
+            return true;
+        }
     }
     return false;
 }

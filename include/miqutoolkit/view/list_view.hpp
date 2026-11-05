@@ -44,9 +44,15 @@ public:
     int get_selected_index() const { return m_selected_index; }
     std::shared_ptr<View> get_selected_item() const;
 
-    // Event listener
+    // Event listeners
     void set_on_item_click_listener(std::function<void(size_t index, std::shared_ptr<View> item)> cb) {
         m_on_item_click = std::move(cb);
+    }
+    void set_on_item_context_click_listener(std::function<void(size_t index, std::shared_ptr<View> item, int x, int y)> cb) {
+        m_on_item_context_click = std::move(cb);
+    }
+    void set_on_empty_context_click_listener(std::function<void(int x, int y)> cb) {
+        m_on_empty_context_click = std::move(cb);
     }
 
     void draw(cairo_t* cr, const Rect& bounds) override;
@@ -80,6 +86,8 @@ private:
 
     std::vector<std::shared_ptr<View>> m_items;
     std::function<void(size_t, std::shared_ptr<View>)> m_on_item_click;
+    std::function<void(size_t, std::shared_ptr<View>, int, int)> m_on_item_context_click;
+    std::function<void(int, int)> m_on_empty_context_click;
 };
 
 class ListViewBuilder : public std::enable_shared_from_this<ListViewBuilder> {
@@ -122,6 +130,16 @@ public:
 
     std::shared_ptr<ListViewBuilder> onItemClick(std::function<void(size_t, std::shared_ptr<View>)> cb) {
         m_view->set_on_item_click_listener(std::move(cb));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ListViewBuilder> onItemContextClick(std::function<void(size_t, std::shared_ptr<View>, int, int)> cb) {
+        m_view->set_on_item_context_click_listener(std::move(cb));
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ListViewBuilder> onEmptyContextClick(std::function<void(int, int)> cb) {
+        m_view->set_on_empty_context_click_listener(std::move(cb));
         return shared_from_this();
     }
 

@@ -722,6 +722,7 @@ void PopupMenu::ensure_popup_window(Window* win) {
         ->autoClamp(true)
         ->onDismiss([weak_self = weak_from_this()]() {
             if (auto self = weak_self.lock()) {
+                self->m_self_ref = nullptr;
                 self->m_popup_window = nullptr;
                 self->m_menu_view = nullptr;
                 if (self->m_on_dismiss) {
@@ -755,16 +756,19 @@ void PopupMenu::show_as_dropdown(View* anchor,
     }
 
     ensure_popup_window(win);
+    m_self_ref = shared_from_this();
     m_popup_window->show_as_dropdown(anchor, gravity, x_offset, y_offset);
 }
 
 void PopupMenu::show_at_location(Window* window, int x, int y) {
     if (!window || m_items.empty()) return;
     ensure_popup_window(window);
+    m_self_ref = shared_from_this();
     m_popup_window->show_at_location(window, x, y);
 }
 
 void PopupMenu::dismiss() {
+    m_self_ref = nullptr;
     if (m_popup_window) {
         auto win = m_popup_window;
         m_popup_window = nullptr;

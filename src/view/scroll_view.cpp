@@ -160,7 +160,15 @@ bool ScrollView::on_mouse_button(int lx, int ly, MouseButton button, bool presse
 
     // Forward to child view
     if (m_content && m_content->is_visible() && !m_child_entries.empty()) {
-        return m_content->on_mouse_button(lx, ly, button, pressed, m_child_entries[0].allocated_bounds);
+        if (m_content->on_mouse_button(lx, ly, button, pressed, m_child_entries[0].allocated_bounds)) {
+            return true;
+        }
+    }
+
+    if (button == MouseButton::Right && pressed && bounds.contains(Point(lx, ly))) {
+        if (handle_context_click(lx, ly, bounds)) {
+            return true;
+        }
     }
 
     return false;

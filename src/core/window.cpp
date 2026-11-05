@@ -210,8 +210,17 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
 
         View* prev_focused = self->m_focused_view;
 
+        bool handled = false;
         if (self->m_root_view) {
-            if (self->m_root_view->on_mouse_button(self->m_last_x, self->m_last_y, mb, pressed, self->m_allocated_content_bounds)) {
+            handled = self->m_root_view->on_mouse_button(self->m_last_x, self->m_last_y, mb, pressed, self->m_allocated_content_bounds);
+            if (handled) {
+                self->schedule_redraw();
+            }
+        }
+
+        if (!handled && pressed && mb == MouseButton::Right) {
+            if (self->m_on_context_click) {
+                self->m_on_context_click(static_cast<int>(self->m_last_x), static_cast<int>(self->m_last_y));
                 self->schedule_redraw();
             }
         }

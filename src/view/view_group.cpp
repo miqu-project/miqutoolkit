@@ -1,4 +1,5 @@
 #include "miqutoolkit/view/view_group.hpp"
+#include "miqutoolkit/view/popup_menu.hpp"
 #include "miqutoolkit/core/window.hpp"
 #include <cmath>
 #include <algorithm>
@@ -37,6 +38,49 @@ std::shared_ptr<View> View::find_view_at(int lx, int ly, Rect* out_bounds) {
     if (!r.contains(Point(lx, ly))) return nullptr;
     if (out_bounds) *out_bounds = r;
     return shared_from_this();
+}
+
+void View::set_context_menu(std::shared_ptr<PopupMenu> menu) {
+    m_context_menu = std::move(menu);
+}
+
+View* View::contextMenu(std::shared_ptr<PopupMenu> menu) {
+    m_context_menu = std::move(menu);
+    return this;
+}
+
+void View::set_context_menu_builder(std::function<std::shared_ptr<PopupMenu>(int, int)> builder) {
+    m_context_menu_builder = std::move(builder);
+}
+
+View* View::contextMenuBuilder(std::function<std::shared_ptr<PopupMenu>(int, int)> builder) {
+    m_context_menu_builder = std::move(builder);
+    return this;
+}
+
+bool View::handle_context_click(int lx, int ly, const Rect& bounds) {
+    (void)bounds;
+    if (m_context_menu_builder) {
+        auto menu = m_context_menu_builder(lx, ly);
+        if (menu && m_window) {
+            m_active_context_menu = menu;
+            auto prev_cb = menu->get_on_dismiss();
+            menu->set_on_dismiss([this, prev_cb]() {
+                if (prev_cb) prev_cb();
+                m_active_context_menu = nullptr;
+            });
+            menu->show_at_location(m_window, lx, ly);
+            return true;
+        }
+    } else if (m_context_menu && m_window) {
+        m_context_menu->show_at_location(m_window, lx, ly);
+        return true;
+    }
+    if (m_on_context_click) {
+        m_on_context_click(lx, ly);
+        return true;
+    }
+    return false;
 }
 
 void ViewGroup::draw_rounded_rect(cairo_t* cr, double x, double y, double w, double h, double r) {
@@ -146,6 +190,12 @@ bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed
         } else if (m_pressed) {
             m_pressed = false;
             m_on_click();
+            return true;
+        }
+    }
+
+    if (button == MouseButton::Right && pressed && bounds.contains(Point(lx, ly))) {
+        if (handle_context_click(lx, ly, bounds)) {
             return true;
         }
     }
