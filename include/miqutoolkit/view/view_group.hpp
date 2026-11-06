@@ -66,6 +66,9 @@ protected:
 
     std::shared_ptr<View> m_touch_target;
     Rect m_touch_target_bounds;
+
+    std::shared_ptr<View> m_mouse_target;
+    Rect m_mouse_target_bounds;
 };
 
 } // namespace miqu

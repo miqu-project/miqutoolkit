@@ -96,6 +96,10 @@ bool Slider::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, c
 
     if (pressed) {
         if (!bounds.contains(Point(lx, ly))) {
+            if (m_dragging) {
+                m_dragging = false;
+                if (m_window) m_window->schedule_redraw();
+            }
             return false;
         }
         m_dragging = true;

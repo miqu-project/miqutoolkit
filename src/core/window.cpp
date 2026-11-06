@@ -178,7 +178,9 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
     },
     .button = [](void* data, struct wl_pointer*, uint32_t, uint32_t, uint32_t button, uint32_t state) {
         auto* self = static_cast<Window*>(data);
-        if (!self || !self->m_pointer_inside) return;
+        if (!self) return;
+        bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
+        if (pressed && !self->m_pointer_inside) return;
         auto keep_alive = self->shared_from_this();
         TooltipManager::get()->on_pointer_button(self);
         MouseButton mb = MouseButton::Left;
@@ -186,8 +188,6 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         else if (button == 0x112) mb = MouseButton::Middle;
         else if (button == 0x113 || button == 0x116) mb = MouseButton::Back;
         else if (button == 0x114 || button == 0x115) mb = MouseButton::Forward;
-
-        bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
 
         if (self->m_popup_view) {
             if (pressed && !self->m_popup_bounds.contains(self->m_last_x, self->m_last_y)) {

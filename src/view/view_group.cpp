@@ -136,6 +136,12 @@ void ViewGroup::add_view(std::shared_ptr<View> child, const LayoutParams& params
 }
 
 void ViewGroup::remove_view(std::shared_ptr<View> child) {
+    if (m_mouse_target == child) {
+        m_mouse_target = nullptr;
+    }
+    if (m_touch_target == child) {
+        m_touch_target = nullptr;
+    }
     auto it = std::remove(m_children.begin(), m_children.end(), child);
     if (it != m_children.end()) {
         m_children.erase(it, m_children.end());
@@ -143,6 +149,8 @@ void ViewGroup::remove_view(std::shared_ptr<View> child) {
 }
 
 void ViewGroup::clear_views() {
+    m_touch_target = nullptr;
+    m_mouse_target = nullptr;
     m_children.clear();
     m_child_entries.clear();
 }
@@ -158,10 +166,21 @@ bool ViewGroup::on_mouse_move(int lx, int ly, const Rect& bounds) {
     if (!is_visible()) return false;
     bool handled = false;
 
-    for (auto& entry : m_child_entries) {
-        if (entry.view && entry.view->is_visible()) {
-            if (entry.view->on_mouse_move(lx, ly, entry.allocated_bounds)) {
-                handled = true;
+    if (m_mouse_target) {
+        Rect target_bounds = m_mouse_target_bounds;
+        for (const auto& entry : m_child_entries) {
+            if (entry.view == m_mouse_target) {
+                target_bounds = entry.allocated_bounds;
+                break;
+            }
+        }
+        handled = m_mouse_target->on_mouse_move(lx, ly, target_bounds);
+    } else {
+        for (auto& entry : m_child_entries) {
+            if (entry.view && entry.view->is_visible()) {
+                if (entry.view->on_mouse_move(lx, ly, entry.allocated_bounds)) {
+                    handled = true;
+                }
             }
         }
     }
@@ -171,14 +190,47 @@ bool ViewGroup::on_mouse_move(int lx, int ly, const Rect& bounds) {
 bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
     if (!is_visible()) return false;
 
-    // Traverse top-to-bottom (reverse order)
-    for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
-        if (it->view && it->view->is_visible()) {
-            if (!it->allocated_bounds.contains(Point(lx, ly))) {
-                continue;
+    if (!pressed && m_mouse_target) {
+        Rect target_bounds = m_mouse_target_bounds;
+        for (const auto& entry : m_child_entries) {
+            if (entry.view == m_mouse_target) {
+                target_bounds = entry.allocated_bounds;
+                break;
             }
-            if (it->view->on_mouse_button(lx, ly, button, pressed, it->allocated_bounds)) {
-                return true;
+        }
+        auto target = m_mouse_target;
+        m_mouse_target = nullptr;
+        bool handled = target->on_mouse_button(lx, ly, button, false, target_bounds);
+        if (m_pressed) {
+            m_pressed = false;
+        }
+        return handled;
+    }
+
+    if (pressed) {
+        m_mouse_target = nullptr;
+        // Traverse top-to-bottom (reverse order)
+        for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
+            if (it->view && it->view->is_visible()) {
+                if (!it->allocated_bounds.contains(Point(lx, ly))) {
+                    continue;
+                }
+                if (it->view->on_mouse_button(lx, ly, button, true, it->allocated_bounds)) {
+                    m_mouse_target = it->view;
+                    m_mouse_target_bounds = it->allocated_bounds;
+                    return true;
+                }
+            }
+        }
+    } else {
+        for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
+            if (it->view && it->view->is_visible()) {
+                if (!it->allocated_bounds.contains(Point(lx, ly))) {
+                    continue;
+                }
+                if (it->view->on_mouse_button(lx, ly, button, false, it->allocated_bounds)) {
+                    return true;
+                }
             }
         }
     }
