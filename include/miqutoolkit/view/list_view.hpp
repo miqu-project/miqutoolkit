@@ -40,6 +40,9 @@ public:
     }
     bool is_selectable() const { return m_selectable; }
 
+    void set_keyboard_navigation_enabled(bool enabled) { m_keyboard_navigation_enabled = enabled; }
+    bool is_keyboard_navigation_enabled() const { return m_keyboard_navigation_enabled; }
+
     void set_selected_index(int index);
     int get_selected_index() const { return m_selected_index; }
     std::shared_ptr<View> get_selected_item() const;
@@ -72,6 +75,7 @@ private:
     bool m_show_dividers = false;
 
     bool m_selectable = true;
+    bool m_keyboard_navigation_enabled = true;
     int m_selected_index = -1;
     int m_hovered_index = -1;
 
@@ -120,6 +124,11 @@ public:
 
     std::shared_ptr<ListViewBuilder> selectable(bool selectable) {
         m_view->set_selectable(selectable);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<ListViewBuilder> keyboardNavigation(bool enabled) {
+        m_view->set_keyboard_navigation_enabled(enabled);
         return shared_from_this();
     }
 

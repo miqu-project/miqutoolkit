@@ -259,6 +259,7 @@ bool ListView::on_scroll(double delta) {
 }
 
 bool ListView::on_key(const KeyPressEvent& event) {
+    if (!m_keyboard_navigation_enabled) return false;
     if (!m_selectable || m_items.empty()) return false;
 
     int count = static_cast<int>(m_items.size());
