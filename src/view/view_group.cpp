@@ -209,26 +209,38 @@ bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed
 
     if (pressed) {
         m_mouse_target = nullptr;
-        // Traverse top-to-bottom (reverse order)
-        for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
-            if (it->view && it->view->is_visible()) {
-                if (!it->allocated_bounds.contains(Point(lx, ly))) {
+        // Traverse top-to-bottom on a safe snapshot copy
+        auto entries_copy = m_child_entries;
+        for (auto it = entries_copy.rbegin(); it != entries_copy.rend(); ++it) {
+            auto child = it->view;
+            Rect child_bounds = it->allocated_bounds;
+            if (child && child->is_visible()) {
+                if (!child_bounds.contains(Point(lx, ly))) {
                     continue;
                 }
-                if (it->view->on_mouse_button(lx, ly, button, true, it->allocated_bounds)) {
-                    m_mouse_target = it->view;
-                    m_mouse_target_bounds = it->allocated_bounds;
+                if (child->on_mouse_button(lx, ly, button, true, child_bounds)) {
+                    // Check if child is still a member of this ViewGroup after event dispatch
+                    for (const auto& cur : m_child_entries) {
+                        if (cur.view == child) {
+                            m_mouse_target = child;
+                            m_mouse_target_bounds = cur.allocated_bounds;
+                            break;
+                        }
+                    }
                     return true;
                 }
             }
         }
     } else {
-        for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
-            if (it->view && it->view->is_visible()) {
-                if (!it->allocated_bounds.contains(Point(lx, ly))) {
+        auto entries_copy = m_child_entries;
+        for (auto it = entries_copy.rbegin(); it != entries_copy.rend(); ++it) {
+            auto child = it->view;
+            Rect child_bounds = it->allocated_bounds;
+            if (child && child->is_visible()) {
+                if (!child_bounds.contains(Point(lx, ly))) {
                     continue;
                 }
-                if (it->view->on_mouse_button(lx, ly, button, false, it->allocated_bounds)) {
+                if (child->on_mouse_button(lx, ly, button, false, child_bounds)) {
                     return true;
                 }
             }
@@ -290,15 +302,22 @@ bool ViewGroup::on_touch(const TouchEvent& event, const Rect& bounds) {
 
     if (event.phase == TouchPhase::Down) {
         m_touch_target = nullptr;
-        // Traverse top-to-bottom (reverse order)
-        for (auto it = m_child_entries.rbegin(); it != m_child_entries.rend(); ++it) {
-            if (it->view && it->view->is_visible()) {
-                if (!it->allocated_bounds.contains(Point(static_cast<int>(event.x), static_cast<int>(event.y)))) {
+        auto entries_copy = m_child_entries;
+        for (auto it = entries_copy.rbegin(); it != entries_copy.rend(); ++it) {
+            auto child = it->view;
+            Rect child_bounds = it->allocated_bounds;
+            if (child && child->is_visible()) {
+                if (!child_bounds.contains(Point(static_cast<int>(event.x), static_cast<int>(event.y)))) {
                     continue;
                 }
-                if (it->view->on_touch(event, it->allocated_bounds)) {
-                    m_touch_target = it->view;
-                    m_touch_target_bounds = it->allocated_bounds;
+                if (child->on_touch(event, child_bounds)) {
+                    for (const auto& cur : m_child_entries) {
+                        if (cur.view == child) {
+                            m_touch_target = child;
+                            m_touch_target_bounds = cur.allocated_bounds;
+                            break;
+                        }
+                    }
                     return true;
                 }
             }

@@ -608,6 +608,9 @@ void PopupWindow::dismiss() {
     if (!m_is_showing) return;
     m_is_showing = false;
 
+    auto self_keepalive = shared_from_this();
+    auto container_keepalive = m_container_view;
+
     if (s_active_popup.get() == this) {
         s_active_popup = nullptr;
     }
@@ -618,11 +621,6 @@ void PopupWindow::dismiss() {
         win->close();
     }
 
-    if (m_container_view) {
-        if (auto* c = dynamic_cast<PopupContainerView*>(m_container_view.get())) {
-            c->clear_views();
-        }
-    }
     if (m_window) {
         Window* win = m_window;
         m_window = nullptr;
@@ -639,11 +637,9 @@ void PopupWindow::notify_dismissed() {
     if (!m_is_showing) return;
     m_is_showing = false;
     m_window = nullptr;
-    if (m_container_view) {
-        if (auto* c = dynamic_cast<PopupContainerView*>(m_container_view.get())) {
-            c->clear_views();
-        }
-    }
+    auto self_keepalive = shared_from_this();
+    auto container_keepalive = m_container_view;
+
     if (m_on_dismiss) {
         auto cb = std::move(m_on_dismiss);
         m_on_dismiss = nullptr;

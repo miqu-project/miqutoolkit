@@ -255,8 +255,10 @@ void Spinner::close_dropdown() {
 }
 
 void Spinner::handle_popup_selected(int index) {
-    close_dropdown();
+    m_is_open = false;
+    m_popup_menu = nullptr;
     set_selected_index(index);
+    request_redraw();
 }
 
 void Spinner::handle_popup_dismissed() {

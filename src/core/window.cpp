@@ -190,13 +190,15 @@ const struct wl_pointer_listener Window::s_pointer_listener = {
         else if (button == 0x114 || button == 0x115) mb = MouseButton::Forward;
 
         if (self->m_popup_view) {
-            if (pressed && !self->m_popup_bounds.contains(self->m_last_x, self->m_last_y)) {
+            auto popup = self->m_popup_view;
+            Rect popup_bounds = self->m_popup_bounds;
+            if (pressed && !popup_bounds.contains(self->m_last_x, self->m_last_y)) {
                 if (!self->m_active_popup || self->m_active_popup->is_dismiss_on_outside_click()) {
                     self->dismiss_popup();
                     return;
                 }
             }
-            if (self->m_popup_view->on_mouse_button(self->m_last_x, self->m_last_y, mb, pressed, self->m_popup_bounds)) {
+            if (popup->on_mouse_button(self->m_last_x, self->m_last_y, mb, pressed, popup_bounds)) {
                 self->schedule_redraw();
             }
             return;
