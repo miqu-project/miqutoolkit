@@ -65,30 +65,59 @@ std::string Spinner::get_selected_item() const {
 }
 
 Size Spinner::measure_size() const {
-    int w = (m_layout_params.width >= 0) ? m_layout_params.width : m_bounds.width;
-    int h = (m_layout_params.height >= 0) ? m_layout_params.height : m_bounds.height;
-
-    if (w > 0 && h > 0) {
-        return Size(w, h);
+    if (m_layout_params.width >= 0 && m_layout_params.height >= 0) {
+        return Size(m_layout_params.width, m_layout_params.height);
     }
 
     auto config = Config::get();
     int font_size = m_font_size > 0 ? m_font_size : config->metrics.font_size;
     if (font_size <= 0) font_size = 11;
 
-    int pad_h = (m_padding.left + m_padding.right > 0) ? (m_padding.left + m_padding.right) : 28;
-    int pad_v = (m_padding.top + m_padding.bottom > 0) ? (m_padding.top + m_padding.bottom) : 14;
+    std::string font_family = !m_font_family.empty() ? m_font_family : config->metrics.font_family;
+    if (font_family.empty()) font_family = "Sans";
 
-    int max_text_w = 80;
+    int pad_l = (m_padding.left > 0) ? m_padding.left : 14;
+    int pad_r = (m_padding.right > 0) ? m_padding.right : 14;
+    int pad_t = (m_padding.top > 0) ? m_padding.top : 6;
+    int pad_b = (m_padding.bottom > 0) ? m_padding.bottom : 6;
+    int pad_h = pad_l + pad_r;
+    int pad_v = pad_t + pad_b;
+
+    cairo_surface_t* temp_surf = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+    cairo_t* cr = cairo_create(temp_surf);
+
+    PangoLayoutPtr layout(pango_cairo_create_layout(cr), g_object_unref);
+    std::string font_desc_str = font_family + " " + std::to_string(font_size);
+    PangoFontDescPtr desc(pango_font_description_from_string(font_desc_str.c_str()), pango_font_description_free);
+    pango_layout_set_font_description(layout.get(), desc.get());
+
+    int max_text_w = 60;
+    int max_text_h = font_size;
+
     for (const auto& it : m_items) {
-        max_text_w = std::max(max_text_w, static_cast<int>(it.size()) * 8);
+        pango_layout_set_text(layout.get(), it.c_str(), -1);
+        int tw = 0, th = 0;
+        pango_layout_get_pixel_size(layout.get(), &tw, &th);
+        max_text_w = std::max(max_text_w, tw);
+        max_text_h = std::max(max_text_h, th);
     }
     if (!m_prompt.empty()) {
-        max_text_w = std::max(max_text_w, static_cast<int>(m_prompt.size()) * 8);
+        pango_layout_set_text(layout.get(), m_prompt.c_str(), -1);
+        int tw = 0, th = 0;
+        pango_layout_get_pixel_size(layout.get(), &tw, &th);
+        max_text_w = std::max(max_text_w, tw);
+        max_text_h = std::max(max_text_h, th);
     }
 
-    int measured_w = (w > 0) ? w : (max_text_w + 32 + pad_h);
-    int measured_h = (h > 0) ? h : (std::max(24, font_size + 14) + pad_v);
+    cairo_destroy(cr);
+    cairo_surface_destroy(temp_surf);
+
+    int arrow_space = 28;
+    int content_w = max_text_w + pad_h + arrow_space;
+    int content_h = std::max(max_text_h + pad_v, std::max(28, font_size + 14));
+
+    int measured_w = (m_layout_params.width >= 0) ? m_layout_params.width : content_w;
+    int measured_h = (m_layout_params.height >= 0) ? m_layout_params.height : content_h;
 
     return Size(measured_w, measured_h);
 }
