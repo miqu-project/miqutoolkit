@@ -79,6 +79,7 @@ public:
     bool on_mouse_move(int lx, int ly, const Rect& bounds) override;
     bool on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) override;
     bool on_key(const KeyPressEvent& event) override;
+    void on_focus_changed(bool focused) override;
 
     // Internal notification when popup item is selected or closed
     void handle_popup_selected(int index);

@@ -137,7 +137,7 @@ void Spinner::draw(cairo_t* cr, const Rect& bounds) {
 
     // 2. Border
     CardView::draw_rounded_rect(cr, bounds.x + 0.5, bounds.y + 0.5, bounds.width - 1.0, bounds.height - 1.0, std::max(0, radius - 1));
-    if (m_is_open) {
+    if (m_is_open || has_focus()) {
         cairo_set_source_rgba(cr, config->colors.primary.r,
                                   config->colors.primary.g,
                                   config->colors.primary.b,
@@ -281,6 +281,7 @@ bool Spinner::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, 
     if (button != MouseButton::Left) return false;
 
     if (pressed && bounds.contains(Point(lx, ly))) {
+        request_focus();
         if (m_is_open) {
             close_dropdown();
         } else {
@@ -291,8 +292,13 @@ bool Spinner::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, 
     return false;
 }
 
+void Spinner::on_focus_changed(bool focused) {
+    (void)focused;
+    request_redraw();
+}
+
 bool Spinner::on_key(const KeyPressEvent& event) {
-    if (!event.pressed) return false;
+    if (!event.pressed || !has_focus()) return false;
 
     if (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space || event.keysym == XKB_KEY_Down) {
         if (!m_is_open) {
