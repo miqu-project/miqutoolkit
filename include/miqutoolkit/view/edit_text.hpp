@@ -27,6 +27,9 @@ public:
     void set_password_mode(bool enable) { m_password_mode = enable; }
     bool is_password_mode() const { return m_password_mode; }
 
+    void set_editable(bool editable);
+    bool is_editable() const { return m_editable; }
+
     void set_focused(bool focus);
     bool is_focused() const { return m_focused; }
 
@@ -59,6 +62,7 @@ private:
     bool m_focused = false;
     bool m_draw_background = true;
     bool m_password_mode = false;
+    bool m_editable = true;
 
     Color m_text_color;
     Color m_hint_color;
@@ -121,6 +125,11 @@ public:
 
     std::shared_ptr<EditTextBuilder> passwordMode(bool enable = true) {
         m_view->set_password_mode(enable);
+        return shared_from_this();
+    }
+
+    std::shared_ptr<EditTextBuilder> editable(bool ed = true) {
+        m_view->set_editable(ed);
         return shared_from_this();
     }
 

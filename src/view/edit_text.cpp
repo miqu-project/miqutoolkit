@@ -14,7 +14,18 @@ void EditText::set_window(Window* win) {
     }
 }
 
+void EditText::set_editable(bool editable) {
+    if (m_editable != editable) {
+        m_editable = editable;
+        if (!m_editable && has_focus()) {
+            clear_focus();
+        }
+        request_redraw();
+    }
+}
+
 void EditText::set_focused(bool focus) {
+    if (focus && !m_editable) return;
     m_focused = focus;
     if (focus) {
         request_focus();
@@ -66,15 +77,23 @@ void EditText::draw(cairo_t* cr, const Rect& bounds) {
     if (m_draw_background) {
         // Background input pill / card
         CardView::draw_rounded_rect(cr, draw_x, draw_y, draw_w, draw_h, radius);
-        Color bg_col = m_has_custom_bg_color ? m_bg_color : config->colors.surface_variant;
+        Color bg_col = m_has_custom_bg_color ? m_bg_color : (m_editable ? config->colors.surface_variant : config->colors.surface_variant.with_alpha(0.35f));
         cairo_set_source_rgba(cr, bg_col.r,
                                   bg_col.g,
                                   bg_col.b,
                                   bg_col.a);
         cairo_fill(cr);
 
-        // Focused outline
-        if (m_focused) {
+        // Border / outline
+        if (!m_editable) {
+            CardView::draw_rounded_rect(cr, draw_x + 0.5, draw_y + 0.5, draw_w - 1.0, draw_h - 1.0, radius);
+            cairo_set_source_rgba(cr, config->colors.outline.r,
+                                      config->colors.outline.g,
+                                      config->colors.outline.b,
+                                      0.2f);
+            cairo_set_line_width(cr, 1.0);
+            cairo_stroke(cr);
+        } else if (m_focused) {
             CardView::draw_rounded_rect(cr, draw_x + 0.5, draw_y + 0.5, draw_w - 1.0, draw_h - 1.0, radius);
             cairo_set_source_rgba(cr, config->colors.primary.r,
                                       config->colors.primary.g,
@@ -143,7 +162,12 @@ void EditText::draw(cairo_t* cr, const Rect& bounds) {
                                       0.6f);
         }
     } else {
-        if (m_has_custom_text_color) {
+        if (!m_editable) {
+            cairo_set_source_rgba(cr, config->colors.on_surface_variant.r,
+                                      config->colors.on_surface_variant.g,
+                                      config->colors.on_surface_variant.b,
+                                      0.7f);
+        } else if (m_has_custom_text_color) {
             cairo_set_source_rgba(cr, m_text_color.r,
                                       m_text_color.g,
                                       m_text_color.b,
@@ -159,7 +183,7 @@ void EditText::draw(cairo_t* cr, const Rect& bounds) {
     pango_cairo_show_layout(cr, layout);
 
     // Draw Cursor
-    if (m_focused && !is_hint) {
+    if (m_editable && m_focused && !is_hint) {
         PangoRectangle strong_pos;
         pango_layout_get_cursor_pos(layout, pango_cursor_index, &strong_pos, nullptr);
 
@@ -175,7 +199,7 @@ void EditText::draw(cairo_t* cr, const Rect& bounds) {
         cairo_move_to(cr, cur_x, cur_y);
         cairo_line_to(cr, cur_x, cur_y + cur_h);
         cairo_stroke(cr);
-    } else if (m_focused && is_hint) {
+    } else if (m_editable && m_focused && is_hint) {
         cairo_set_source_rgba(cr, config->colors.primary.r,
                                   config->colors.primary.g,
                                   config->colors.primary.b,
@@ -191,7 +215,7 @@ void EditText::draw(cairo_t* cr, const Rect& bounds) {
 }
 
 bool EditText::on_key(const KeyPressEvent& event) {
-    if (!m_focused || !event.pressed) return false;
+    if (!m_editable || !m_focused || !event.pressed) return false;
 
     if (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter) {
         if (m_on_submit) {
@@ -276,6 +300,7 @@ bool EditText::on_key(const KeyPressEvent& event) {
 }
 
 bool EditText::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
+    if (!m_editable) return false;
     if (button == MouseButton::Left && pressed) {
         int draw_x = bounds.x;
         int draw_y = bounds.y;
