@@ -109,6 +109,10 @@ void ImageButton::draw(cairo_t* cr, const Rect& bounds) {
     }
 
     cairo_restore(cr);
+
+    if (has_focus() && should_draw_focus_ring()) {
+        draw_focus_ring(cr, bounds);
+    }
 }
 
 bool ImageButton::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
@@ -124,6 +128,7 @@ bool ImageButton::on_mouse_button(int lx, int ly, MouseButton button, bool press
     if (pressed) {
         if (contains) {
             m_pressed = true;
+            if (is_focusable()) request_focus();
             if (m_window) m_window->schedule_redraw();
             return true;
         }

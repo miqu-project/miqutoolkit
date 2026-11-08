@@ -1,6 +1,7 @@
 #include "miqutoolkit/view/search_view.hpp"
 #include "miqutoolkit/view/card_view.hpp"
 #include "miqutoolkit/core/config.hpp"
+#include "miqutoolkit/core/window.hpp"
 #include <xkbcommon/xkbcommon-keysyms.h>
 #include <algorithm>
 #include <cmath>
@@ -164,6 +165,31 @@ void SearchView::draw(cairo_t* cr, const Rect& bounds) {
 
         m_child_entries.push_back({m_edit_text, text_rect});
         m_edit_text->draw(cr, text_rect);
+    }
+}
+
+void SearchView::draw_focus_ring(cairo_t* cr, const Rect& bounds) {
+    if (!should_draw_focus_ring() || !cr || bounds.width <= 0 || bounds.height <= 0) return;
+    auto config = Config::get();
+    Color focus_color = config ? config->colors.primary : Color(0.2f, 0.6f, 1.0f);
+
+    cairo_save(cr);
+    cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.90f);
+    cairo_set_line_width(cr, 2.0);
+
+    double offset = 1.0;
+    double x = bounds.x + offset;
+    double y = bounds.y + offset;
+    double w = bounds.width - (offset * 2.0);
+    double h = bounds.height - (offset * 2.0);
+    double r = (m_corner_radius >= 0) ? m_corner_radius : (h / 2.0);
+
+    CardView::draw_rounded_rect(cr, x, y, w, h, r);
+    cairo_stroke(cr);
+    cairo_restore(cr);
+
+    if (m_window) {
+        m_window->notify_focus_ring_drawn();
     }
 }
 

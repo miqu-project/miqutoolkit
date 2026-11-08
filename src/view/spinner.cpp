@@ -14,7 +14,9 @@ using PangoLayoutPtr = std::unique_ptr<PangoLayout, decltype(&g_object_unref)>;
 using PangoFontDescPtr = std::unique_ptr<PangoFontDescription, decltype(&pango_font_description_free)>;
 } // anonymous namespace
 
-Spinner::Spinner() = default;
+Spinner::Spinner() {
+    m_focusable = true;
+}
 
 Spinner::~Spinner() {
     close_dropdown();
@@ -243,6 +245,10 @@ void Spinner::draw(cairo_t* cr, const Rect& bounds) {
     pango_cairo_show_layout(cr, arrow_layout.get());
 
     cairo_restore(cr);
+
+    if (has_focus() && should_draw_focus_ring()) {
+        draw_focus_ring(cr, bounds);
+    }
 }
 
 void Spinner::open_dropdown() {
@@ -329,7 +335,8 @@ void Spinner::on_focus_changed(bool focused) {
 bool Spinner::on_key(const KeyPressEvent& event) {
     if (!event.pressed || !has_focus()) return false;
 
-    if (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space || event.keysym == XKB_KEY_Down) {
+    // Shift + Down expands the spinner dropdown
+    if (event.has_shift() && (event.keysym == XKB_KEY_Down || event.keysym == XKB_KEY_KP_Down)) {
         if (!m_is_open) {
             open_dropdown();
             return true;

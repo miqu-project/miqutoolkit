@@ -44,6 +44,7 @@ Toolbar::Toolbar() {
     m_btn_back->set_on_click_listener([this]() {
         if (m_on_back) m_on_back();
     });
+    m_btn_back->set_focusable(false);
 
     m_btn_refresh = std::make_shared<ImageButton>(icons::REFRESH);
     m_btn_refresh->set_circle(true);
@@ -53,6 +54,7 @@ Toolbar::Toolbar() {
     m_btn_refresh->set_on_click_listener([this]() {
         if (m_on_refresh) m_on_refresh();
     });
+    m_btn_refresh->set_focusable(false);
 
     m_btn_menu = std::make_shared<ImageButton>(icons::MENU);
     m_btn_menu->set_circle(true);
@@ -62,6 +64,7 @@ Toolbar::Toolbar() {
     m_btn_menu->set_on_click_listener([this]() {
         if (m_on_menu) m_on_menu();
     });
+    m_btn_menu->set_focusable(false);
 
     m_btn_close = std::make_shared<ImageButton>(icons::POWER);
     m_btn_close->set_circle(true);
@@ -75,6 +78,7 @@ Toolbar::Toolbar() {
             m_window->request_close();
         }
     });
+    m_btn_close->set_focusable(false);
 
     rebuild_internal_views();
 }

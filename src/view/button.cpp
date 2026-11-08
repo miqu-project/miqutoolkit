@@ -3,6 +3,8 @@
 #include "miqutoolkit/view/image_view.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include "miqutoolkit/core/window.hpp"
+#include "miqutoolkit/core/app_engine.hpp"
+#include <xkbcommon/xkbcommon-keysyms.h>
 #include <pango/pangocairo.h>
 #include <iostream>
 
@@ -259,6 +261,67 @@ void Button::draw(cairo_t* cr, const Rect& bounds) {
     }
 
     cairo_restore(cr);
+
+    if (has_focus() && should_draw_focus_ring()) {
+        draw_focus_ring(cr, bounds);
+    }
+}
+
+void Button::draw_focus_ring(cairo_t* cr, const Rect& bounds) {
+    if (!should_draw_focus_ring() || !cr || bounds.width <= 0 || bounds.height <= 0) return;
+    auto config = Config::get();
+    Color focus_color = config ? config->colors.primary : Color(0.2f, 0.6f, 1.0f);
+
+    cairo_save(cr);
+    double r = (m_corner_radius >= 0) ? m_corner_radius : (config ? config->metrics.corner_radius : 8.0);
+
+    if (m_style == ButtonStyle::Primary) {
+        // Outer halo & outer ring for primary button to contrast against filled primary background
+        double halo = 3.5;
+        CardView::draw_rounded_rect(cr, bounds.x - halo, bounds.y - halo,
+                                    bounds.width + halo * 2.0, bounds.height + halo * 2.0, r + halo);
+        cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.25f);
+        cairo_fill(cr);
+
+        double ring = 2.0;
+        CardView::draw_rounded_rect(cr, bounds.x - ring, bounds.y - ring,
+                                    bounds.width + ring * 2.0, bounds.height + ring * 2.0, r + ring);
+        cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.95f);
+        cairo_set_line_width(cr, 2.0);
+        cairo_stroke(cr);
+    } else {
+        // Standard, outlined, or flat button
+        CardView::draw_rounded_rect(cr, bounds.x + 1.0, bounds.y + 1.0,
+                                    bounds.width - 2.0, bounds.height - 2.0, r);
+        cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.95f);
+        cairo_set_line_width(cr, 2.0);
+        cairo_stroke(cr);
+    }
+    cairo_restore(cr);
+
+    if (m_window) {
+        m_window->notify_focus_ring_drawn();
+    }
+}
+
+bool Button::on_key(const KeyPressEvent& event) {
+    if (!is_visible() || !is_enabled() || !has_focus()) return false;
+    if (event.pressed && (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space)) {
+        if (m_on_click) {
+            auto self = shared_from_this();
+            m_pressed = true;
+            request_redraw();
+            if (auto* eng = AppEngine::instance()) {
+                eng->post_delayed(80, [this, self]() {
+                    m_pressed = false;
+                    request_redraw();
+                });
+            }
+            m_on_click();
+            return true;
+        }
+    }
+    return false;
 }
 
 bool Button::on_mouse_move(int lx, int ly, const Rect& bounds) {
@@ -280,6 +343,7 @@ bool Button::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, c
     if (pressed) {
         if (contains) {
             m_pressed = true;
+            if (is_focusable()) request_focus();
             if (m_window) m_window->schedule_redraw();
             return true;
         }

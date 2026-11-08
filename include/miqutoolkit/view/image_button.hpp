@@ -9,8 +9,8 @@ namespace miqu {
 
 class ImageButton : public View {
 public:
-    ImageButton() = default;
-    explicit ImageButton(std::string icon) : m_icon(std::move(icon)) {}
+    ImageButton() { m_focusable = true; }
+    explicit ImageButton(std::string icon) : m_icon(std::move(icon)) { m_focusable = true; }
 
     void set_icon(std::string icon) { m_icon = std::move(icon); }
     const std::string& get_icon() const { return m_icon; }

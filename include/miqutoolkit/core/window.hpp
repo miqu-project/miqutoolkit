@@ -120,10 +120,15 @@ public:
 
     void update_seat_capabilities(uint32_t caps);
 
-    // Focus Management
+    // Focus Management & Traversal
     void set_focused_view(View* view);
     void clear_focus();
     View* get_focused_view() const { return m_focused_view; }
+    bool focus_next();
+    bool focus_prev();
+    bool focus_direction(FocusDirection dir);
+    void notify_focus_ring_drawn() { m_focus_ring_drawn = true; }
+    void notify_view_destroyed(View* view);
 
 private:
     void render_frame();
@@ -163,6 +168,7 @@ private:
     bool m_rendering = false;
     bool m_has_keyboard_focus = false;
     View* m_focused_view = nullptr;
+    bool m_focus_ring_drawn = false;
     Rect m_allocated_content_bounds;
 
     struct wl_surface* m_surface = nullptr;

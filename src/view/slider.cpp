@@ -2,6 +2,7 @@
 #include "miqutoolkit/view/card_view.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include "miqutoolkit/core/window.hpp"
+#include <xkbcommon/xkbcommon-keysyms.h>
 #include <cmath>
 
 #ifndef M_PI
@@ -81,6 +82,10 @@ void Slider::draw(cairo_t* cr, const Rect& bounds) {
     }
 
     cairo_restore(cr);
+
+    if (has_focus() && should_draw_focus_ring()) {
+        draw_focus_ring(cr, bounds);
+    }
 }
 
 bool Slider::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
@@ -103,6 +108,7 @@ bool Slider::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, c
             return false;
         }
         m_dragging = true;
+        if (is_focusable()) request_focus();
         float v = std::clamp(static_cast<float>(lx - track_start_x) / usable_w, 0.0f, 1.0f);
         m_value = v;
         if (m_on_change) {
@@ -154,6 +160,26 @@ bool Slider::on_mouse_move(int lx, int ly, const Rect& bounds) {
     }
 
     return m_hovered;
+}
+
+bool Slider::on_key(const KeyPressEvent& event) {
+    if (!is_visible() || !is_enabled() || !has_focus() || !event.pressed) return false;
+    float step = 0.05f;
+    float new_val = m_value;
+    if (event.keysym == XKB_KEY_minus || event.keysym == XKB_KEY_KP_Subtract || event.keysym == XKB_KEY_underscore) {
+        new_val = std::clamp(m_value - step, 0.0f, 1.0f);
+    } else if (event.keysym == XKB_KEY_plus || event.keysym == XKB_KEY_KP_Add || event.keysym == XKB_KEY_equal) {
+        new_val = std::clamp(m_value + step, 0.0f, 1.0f);
+    } else {
+        return false;
+    }
+
+    if (std::abs(new_val - m_value) > 0.0001f) {
+        m_value = new_val;
+        if (m_on_change) m_on_change(m_value, true);
+        request_redraw();
+    }
+    return true;
 }
 
 } // namespace miqu

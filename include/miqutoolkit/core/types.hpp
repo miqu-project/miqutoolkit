@@ -84,5 +84,14 @@ enum class TextVerticalAlignment {
     Bottom
 };
 
+enum class FocusDirection {
+    Next,
+    Previous,
+    Up,
+    Down,
+    Left,
+    Right
+};
+
 } // namespace miqu
 

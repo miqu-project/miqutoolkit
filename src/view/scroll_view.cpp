@@ -19,6 +19,24 @@ void ScrollView::set_scroll_y(double y) {
     if (m_window) m_window->schedule_redraw();
 }
 
+void ScrollView::scroll_to_view(View* view) {
+    if (!view || !m_content) return;
+    Rect vb = view->get_bounds();
+    Rect content_rect = get_content_rect(get_bounds());
+    if (content_rect.height <= 0 || vb.height <= 0) return;
+
+    int pad = 24;
+    if (vb.y < content_rect.y + pad) {
+        double delta = (content_rect.y + pad) - vb.y;
+        m_scroll_y = std::clamp(m_scroll_y - delta, 0.0, m_max_scroll);
+        request_redraw();
+    } else if (vb.y + vb.height > content_rect.y + content_rect.height - pad) {
+        double delta = (vb.y + vb.height) - (content_rect.y + content_rect.height - pad);
+        m_scroll_y = std::clamp(m_scroll_y + delta, 0.0, m_max_scroll);
+        request_redraw();
+    }
+}
+
 Size ScrollView::measure_size() const {
     return measure_size(-1);
 }

@@ -5,6 +5,7 @@
 #include "miqutoolkit/core/types.hpp"
 #include "miqutoolkit/view/layout_params.hpp"
 #include <cairo.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
 #include <memory>
 #include <vector>
 #include <functional>
@@ -13,6 +14,7 @@ namespace miqu {
 
 class Window;
 class PopupMenu;
+class ViewGroup;
 
 enum class Visibility {
     Visible,
@@ -22,7 +24,7 @@ enum class Visibility {
 
 class View : public std::enable_shared_from_this<View> {
 public:
-    virtual ~View() = default;
+    virtual ~View();
 
     virtual void draw(cairo_t* cr, const Rect& bounds) = 0;
 
@@ -37,18 +39,40 @@ public:
         return measure_size();
     }
 
-    virtual bool on_mouse_move(int lx, int ly, const Rect& bounds) { return false; }
+    virtual bool on_mouse_move(int lx, int ly, const Rect& bounds) { (void)lx; (void)ly; (void)bounds; return false; }
     virtual bool on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
-        if (!is_visible() || !bounds.contains(Point(lx, ly))) return false;
+        if (!is_visible() || !is_enabled() || !bounds.contains(Point(lx, ly))) return false;
         if (button == MouseButton::Right && pressed) {
             return handle_context_click(lx, ly, bounds);
         }
+        if (button == MouseButton::Left && pressed) {
+            auto self = shared_from_this();
+            if (is_focusable()) {
+                request_focus();
+            }
+            request_redraw();
+            if (m_on_click) {
+                m_on_click();
+                return true;
+            }
+        }
         return false;
     }
-    virtual bool on_key(const KeyPressEvent& event) { return false; }
-    virtual bool on_scroll(double delta) { return false; }
+    virtual bool on_key(const KeyPressEvent& event) {
+        if (!is_visible() || !is_enabled() || !has_focus()) return false;
+        if (event.pressed && (event.keysym == XKB_KEY_space || event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter)) {
+            if (m_on_click) {
+                auto self = shared_from_this();
+                request_redraw();
+                m_on_click();
+                return true;
+            }
+        }
+        return false;
+    }
+    virtual bool on_scroll(double delta) { (void)delta; return false; }
     virtual bool on_touch(const TouchEvent& event, const Rect& bounds) {
-        if (!is_visible()) return false;
+        if (!is_visible() || !is_enabled()) return false;
         int lx = static_cast<int>(event.x);
         int ly = static_cast<int>(event.y);
         switch (event.phase) {
@@ -104,8 +128,33 @@ public:
     Visibility get_visibility() const { return m_visibility; }
     bool is_visible() const { return m_visibility == Visibility::Visible; }
 
+    // Enabled State
+    void set_enabled(bool enabled) {
+        if (m_enabled != enabled) {
+            m_enabled = enabled;
+            request_redraw();
+        }
+    }
+    bool is_enabled() const { return m_enabled; }
+
+    // Focusability
+    void set_focusable(bool focusable) { m_focusable = focusable; }
+    bool is_focusable() const { return m_focusable && is_visible() && is_enabled(); }
+
+    // Focus Ring Customization
+    virtual void draw_focus_ring(cairo_t* cr, const Rect& bounds);
+    void set_draw_focus_ring(bool draw) { m_draw_focus_ring = draw; }
+    bool should_draw_focus_ring() const { return m_draw_focus_ring; }
+    void set_focus_ring_radius(int radius) { m_focus_ring_radius = radius; }
+    int get_focus_ring_radius() const { return m_focus_ring_radius; }
+
     // Click Listener
-    void set_on_click_listener(std::function<void()> listener) { m_on_click = std::move(listener); }
+    void set_on_click_listener(std::function<void()> listener) {
+        m_on_click = std::move(listener);
+        if (m_on_click) {
+            m_focusable = true;
+        }
+    }
 
     // Context Click & Context Menu
     void set_on_context_click_listener(std::function<void(int global_x, int global_y)> listener) {
@@ -124,9 +173,11 @@ public:
 
     virtual bool handle_context_click(int lx, int ly, const Rect& bounds);
 
-    // Window Reference
+    // Window & Hierarchy Reference
     virtual void set_window(Window* win) { m_window = win; }
     Window* get_window() const { return m_window; }
+    void set_parent(ViewGroup* parent) { m_parent = parent; }
+    ViewGroup* get_parent() const { return m_parent; }
     void request_redraw();
 
     // Focus Management
@@ -152,7 +203,12 @@ protected:
     Margin m_margin;
     LayoutParams m_layout_params;
     Visibility m_visibility = Visibility::Visible;
+    bool m_enabled = true;
+    bool m_focusable = false;
+    bool m_draw_focus_ring = true;
+    int m_focus_ring_radius = -1;
     Window* m_window = nullptr;
+    ViewGroup* m_parent = nullptr;
     std::function<void()> m_on_click;
     std::function<void(int, int)> m_on_context_click;
     std::shared_ptr<PopupMenu> m_context_menu;

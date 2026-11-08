@@ -8,7 +8,7 @@ namespace miqu {
 
 class Slider : public View {
 public:
-    Slider() = default;
+    Slider() { m_focusable = true; }
 
     void set_value(float value) {
         float clamped = std::clamp(value, 0.0f, 1.0f);
@@ -42,6 +42,7 @@ public:
 
     bool on_mouse_move(int lx, int ly, const Rect& bounds) override;
     bool on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) override;
+    bool on_key(const KeyPressEvent& event) override;
 
 private:
     float m_value = 0.0f;

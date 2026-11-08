@@ -28,7 +28,10 @@ public:
     void set_focus_border(bool enable) { m_focus_border = enable; }
     bool has_focus_border() const { return m_focus_border; }
 
-    void set_radius(int radius) { m_corner_radius = radius; }
+    void set_radius(int radius) {
+        m_corner_radius = radius;
+        set_focus_ring_radius(radius);
+    }
     int get_radius() const { return m_corner_radius; }
 
     void set_elevation(double elevation) { m_elevation = std::max(0.0, elevation); }
@@ -41,6 +44,7 @@ public:
                                     std::function<void(const std::string&)> on_submit = nullptr);
 
     void draw(cairo_t* cr, const Rect& bounds) override;
+    void draw_focus_ring(cairo_t* cr, const Rect& bounds) override;
     Size measure_size() const override;
 
     bool on_key(const KeyPressEvent& event) override;

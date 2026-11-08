@@ -15,8 +15,8 @@ enum class ButtonStyle {
 
 class Button : public View {
 public:
-    Button() = default;
-    explicit Button(std::string text) : m_text(std::move(text)) {}
+    Button() { m_focusable = true; }
+    explicit Button(std::string text) : m_text(std::move(text)) { m_focusable = true; }
 
     void set_text(std::string text) {
         if (m_text != text) {
@@ -137,10 +137,12 @@ public:
     bool is_selected() const { return m_selected; }
 
     void draw(cairo_t* cr, const Rect& bounds) override;
+    void draw_focus_ring(cairo_t* cr, const Rect& bounds) override;
     Size measure_size() const override;
 
     bool on_mouse_move(int lx, int ly, const Rect& bounds) override;
     bool on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) override;
+    bool on_key(const KeyPressEvent& event) override;
 
 private:
     std::string m_text;

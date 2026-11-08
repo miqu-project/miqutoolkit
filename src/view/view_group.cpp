@@ -1,6 +1,8 @@
 #include "miqutoolkit/view/view_group.hpp"
 #include "miqutoolkit/view/popup_menu.hpp"
 #include "miqutoolkit/core/window.hpp"
+#include "miqutoolkit/core/config.hpp"
+#include <xkbcommon/xkbcommon-keysyms.h>
 #include <cmath>
 #include <algorithm>
 
@@ -9,6 +11,12 @@
 #endif
 
 namespace miqu {
+
+View::~View() {
+    if (m_window) {
+        m_window->notify_view_destroyed(this);
+    }
+}
 
 void View::request_redraw() {
     if (m_window) {
@@ -30,6 +38,31 @@ void View::clear_focus() {
 
 bool View::has_focus() const {
     return m_window && (m_window->get_focused_view() == this);
+}
+
+void View::draw_focus_ring(cairo_t* cr, const Rect& bounds) {
+    if (!m_draw_focus_ring || !cr || bounds.width <= 0 || bounds.height <= 0) return;
+    auto config = Config::get();
+    Color focus_color = config ? config->colors.primary : Color(0.2f, 0.6f, 1.0f);
+
+    cairo_save(cr);
+    cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.90f);
+    cairo_set_line_width(cr, 2.0);
+
+    double offset = 1.0;
+    double x = bounds.x + offset;
+    double y = bounds.y + offset;
+    double w = bounds.width - (offset * 2.0);
+    double h = bounds.height - (offset * 2.0);
+    double r = (m_focus_ring_radius >= 0) ? m_focus_ring_radius : (config ? config->metrics.corner_radius : 8.0);
+
+    ViewGroup::draw_rounded_rect(cr, x, y, w, h, r);
+    cairo_stroke(cr);
+    cairo_restore(cr);
+
+    if (m_window) {
+        m_window->notify_focus_ring_drawn();
+    }
 }
 
 std::shared_ptr<View> View::find_view_at(int lx, int ly, Rect* out_bounds) {
@@ -110,21 +143,52 @@ void ViewGroup::draw_background(cairo_t* cr, const Rect& bounds) const {
 }
 
 void ViewGroup::draw_stroke(cairo_t* cr, const Rect& bounds) const {
-    if (m_stroke_width <= 0 || m_stroke_color.a <= 0.0f) return;
+    if (m_stroke_width > 0 && m_stroke_color.a > 0.0f) {
+        cairo_save(cr);
+        double offset = m_stroke_width / 2.0;
+        double r = std::max(0.0, static_cast<double>(m_corner_radius) - offset);
+        draw_rounded_rect(cr, bounds.x + offset, bounds.y + offset,
+                          bounds.width - m_stroke_width, bounds.height - m_stroke_width, r);
+        cairo_set_source_rgba(cr, m_stroke_color.r, m_stroke_color.g, m_stroke_color.b, m_stroke_color.a);
+        cairo_set_line_width(cr, m_stroke_width);
+        cairo_stroke(cr);
+        cairo_restore(cr);
+    }
+
+    if (has_focus() && should_draw_focus_ring()) {
+        const_cast<ViewGroup*>(this)->draw_focus_ring(cr, bounds);
+    }
+}
+
+void ViewGroup::draw_focus_ring(cairo_t* cr, const Rect& bounds) {
+    if (!should_draw_focus_ring() || !cr || bounds.width <= 0 || bounds.height <= 0) return;
+    auto config = Config::get();
+    Color focus_color = config ? config->colors.primary : Color(0.2f, 0.6f, 1.0f);
 
     cairo_save(cr);
-    double offset = m_stroke_width / 2.0;
-    double r = std::max(0.0, static_cast<double>(m_corner_radius) - offset);
-    draw_rounded_rect(cr, bounds.x + offset, bounds.y + offset,
-                      bounds.width - m_stroke_width, bounds.height - m_stroke_width, r);
-    cairo_set_source_rgba(cr, m_stroke_color.r, m_stroke_color.g, m_stroke_color.b, m_stroke_color.a);
-    cairo_set_line_width(cr, m_stroke_width);
+    cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.90f);
+    cairo_set_line_width(cr, 2.0);
+
+    double offset = 1.0;
+    double x = bounds.x + offset;
+    double y = bounds.y + offset;
+    double w = bounds.width - (offset * 2.0);
+    double h = bounds.height - (offset * 2.0);
+    double r = (m_focus_ring_radius >= 0) ? m_focus_ring_radius :
+               ((m_corner_radius > 0) ? m_corner_radius : (config ? config->metrics.corner_radius : 8.0));
+
+    draw_rounded_rect(cr, x, y, w, h, r);
     cairo_stroke(cr);
     cairo_restore(cr);
+
+    if (m_window) {
+        m_window->notify_focus_ring_drawn();
+    }
 }
 
 void ViewGroup::add_view(std::shared_ptr<View> child) {
     if (!child) return;
+    child->set_parent(this);
     if (m_window) child->set_window(m_window);
     m_children.push_back(std::move(child));
 }
@@ -136,12 +200,14 @@ void ViewGroup::add_view(std::shared_ptr<View> child, const LayoutParams& params
 }
 
 void ViewGroup::remove_view(std::shared_ptr<View> child) {
+    if (!child) return;
     if (m_mouse_target == child) {
         m_mouse_target = nullptr;
     }
     if (m_touch_target == child) {
         m_touch_target = nullptr;
     }
+    child->set_parent(nullptr);
     auto it = std::remove(m_children.begin(), m_children.end(), child);
     if (it != m_children.end()) {
         m_children.erase(it, m_children.end());
@@ -151,6 +217,9 @@ void ViewGroup::remove_view(std::shared_ptr<View> child) {
 void ViewGroup::clear_views() {
     m_touch_target = nullptr;
     m_mouse_target = nullptr;
+    for (auto& c : m_children) {
+        if (c) c->set_parent(nullptr);
+    }
     m_children.clear();
     m_child_entries.clear();
 }
@@ -272,7 +341,18 @@ bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed
 }
 
 bool ViewGroup::on_key(const KeyPressEvent& event) {
-    if (!is_visible()) return false;
+    if (!is_visible() || !is_enabled()) return false;
+
+    // If this ViewGroup itself has focus and a click listener, handle Enter / Space
+    if (has_focus() && event.pressed &&
+        (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space)) {
+        if (m_on_click) {
+            auto self = shared_from_this();
+            request_redraw();
+            m_on_click();
+            return true;
+        }
+    }
 
     for (auto& child : m_children) {
         if (child && child->is_visible()) {
@@ -378,6 +458,19 @@ std::shared_ptr<View> ViewGroup::find_view_at(int lx, int ly, Rect* out_bounds) 
         return shared_from_this();
     }
     return nullptr;
+}
+
+void ViewGroup::collect_focusable_views(std::vector<View*>& out) {
+    if (!is_visible() || !is_enabled()) return;
+    for (const auto& child : m_children) {
+        if (!child || !child->is_visible() || !child->is_enabled()) continue;
+        if (child->is_focusable()) {
+            out.push_back(child.get());
+        }
+        if (auto group = std::dynamic_pointer_cast<ViewGroup>(child)) {
+            group->collect_focusable_views(out);
+        }
+    }
 }
 
 } // namespace miqu

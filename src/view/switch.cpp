@@ -2,6 +2,7 @@
 #include "miqutoolkit/view/card_view.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include "miqutoolkit/core/window.hpp"
+#include <xkbcommon/xkbcommon-keysyms.h>
 #include <cmath>
 
 #ifndef M_PI
@@ -10,7 +11,9 @@
 
 namespace miqu {
 
-Switch::Switch() = default;
+Switch::Switch() {
+    m_focusable = true;
+}
 
 void Switch::set_checked(bool checked) {
     if (m_checked != checked) {
@@ -71,13 +74,13 @@ void Switch::draw(cairo_t* cr, const Rect& bounds) {
     double knob_cy = ty + track_h / 2.0;
     double knob_cx = m_checked ? (tx + track_w - inset - knob_r) : (tx + inset + knob_r);
 
-    // 3. Ambient hover halo
-    if (m_hovered || m_pressed) {
+    // 3. Ambient hover halo / focus halo
+    if (m_hovered || m_pressed || has_focus()) {
         cairo_arc(cr, knob_cx, knob_cy, knob_r + 4.0, 0, 2 * M_PI);
         if (m_checked) {
-            cairo_set_source_rgba(cr, active_track.r, active_track.g, active_track.b, 0.25f);
+            cairo_set_source_rgba(cr, active_track.r, active_track.g, active_track.b, 0.35f);
         } else {
-            cairo_set_source_rgba(cr, config->colors.on_surface.r, config->colors.on_surface.g, config->colors.on_surface.b, 0.12f);
+            cairo_set_source_rgba(cr, config->colors.on_surface.r, config->colors.on_surface.g, config->colors.on_surface.b, 0.20f);
         }
         cairo_fill(cr);
     }
@@ -100,6 +103,51 @@ void Switch::draw(cairo_t* cr, const Rect& bounds) {
     }
 
     cairo_restore(cr);
+
+    if (has_focus() && should_draw_focus_ring()) {
+        draw_focus_ring(cr, bounds);
+    }
+}
+
+void Switch::draw_focus_ring(cairo_t* cr, const Rect& bounds) {
+    if (!should_draw_focus_ring() || !cr || bounds.width <= 0 || bounds.height <= 0) return;
+    auto config = Config::get();
+    Rect content_rect = get_content_rect(bounds);
+    if (content_rect.width <= 0 || content_rect.height <= 0) return;
+
+    double track_w = std::min(static_cast<double>(content_rect.width), 44.0);
+    double track_h = std::min(static_cast<double>(content_rect.height), 24.0);
+
+    double tx = content_rect.x + (content_rect.width - track_w) / 2.0;
+    double ty = content_rect.y + (content_rect.height - track_h) / 2.0;
+    double radius = track_h / 2.0;
+
+    cairo_save(cr);
+
+    Color focus_color = config ? config->colors.primary : Color(0.2f, 0.6f, 1.0f);
+
+    // 1. Ambient outer focus glow
+    double halo_offset = 3.5;
+    CardView::draw_rounded_rect(cr, tx - halo_offset, ty - halo_offset,
+                                track_w + (halo_offset * 2.0), track_h + (halo_offset * 2.0),
+                                radius + halo_offset);
+    cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.25f);
+    cairo_fill(cr);
+
+    // 2. High-contrast crisp outer focus ring
+    double ring_offset = 2.0;
+    CardView::draw_rounded_rect(cr, tx - ring_offset, ty - ring_offset,
+                                track_w + (ring_offset * 2.0), track_h + (ring_offset * 2.0),
+                                radius + ring_offset);
+    cairo_set_source_rgba(cr, focus_color.r, focus_color.g, focus_color.b, 0.95f);
+    cairo_set_line_width(cr, 2.0);
+    cairo_stroke(cr);
+
+    cairo_restore(cr);
+
+    if (m_window) {
+        m_window->notify_focus_ring_drawn();
+    }
 }
 
 bool Switch::on_mouse_move(int lx, int ly, const Rect& bounds) {
@@ -117,20 +165,37 @@ bool Switch::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, c
     if (pressed) {
         if (!bounds.contains(Point(lx, ly))) return false;
         m_pressed = true;
+        if (is_focusable()) request_focus();
         if (m_window) m_window->schedule_redraw();
         return true;
     } else {
         if (m_pressed) {
             m_pressed = false;
-            if (bounds.contains(Point(lx, ly))) {
+            auto self = shared_from_this();
+            bool inside = bounds.contains(Point(lx, ly));
+            if (inside) {
                 set_checked(!m_checked);
-                if (m_on_checked_changed) {
-                    m_on_checked_changed(m_checked);
-                }
             }
             if (m_window) m_window->schedule_redraw();
+            if (inside && m_on_checked_changed) {
+                m_on_checked_changed(m_checked);
+            }
             return true;
         }
+    }
+    return false;
+}
+
+bool Switch::on_key(const KeyPressEvent& event) {
+    if (!is_visible() || !is_enabled() || !has_focus()) return false;
+    if (event.pressed && event.keysym == XKB_KEY_space) {
+        auto self = shared_from_this();
+        set_checked(!m_checked);
+        request_redraw();
+        if (m_on_checked_changed) {
+            m_on_checked_changed(m_checked);
+        }
+        return true;
     }
     return false;
 }

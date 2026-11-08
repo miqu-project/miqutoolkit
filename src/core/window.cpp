@@ -1,6 +1,8 @@
 #include "miqutoolkit/core/window.hpp"
 #include "miqutoolkit/view/popup_window.hpp"
 #include "miqutoolkit/view/tooltip_manager.hpp"
+#include "miqutoolkit/view/view_group.hpp"
+#include "miqutoolkit/view/scroll_view.hpp"
 #include "miqutoolkit/core/app_engine.hpp"
 #include "miqutoolkit/core/config.hpp"
 #include "miqutoolkit/system/window_manager.hpp"
@@ -718,6 +720,8 @@ void Window::render_frame() {
     cairo_paint(buf->cr);
     cairo_restore(buf->cr);
 
+    m_focus_ring_drawn = false;
+
     if (m_role == WindowRole::Toplevel) {
         if (!m_transparent) {
             Color bg = m_has_custom_bg ? m_background_color : Config::get()->colors.background;
@@ -785,6 +789,12 @@ void Window::render_frame() {
             m_allocated_content_bounds = content_bounds;
             m_root_view->draw(buf->cr, content_bounds);
         }
+    }
+
+    // Safety net: if focusable view is focused but did not draw its own focus ring, draw it now
+    if (m_focused_view && m_focused_view->is_visible() && m_focused_view->is_focusable() &&
+        m_focused_view->should_draw_focus_ring() && !m_focus_ring_drawn) {
+        m_focused_view->draw_focus_ring(buf->cr, m_focused_view->get_bounds());
     }
 
     // 3. Draw Active Popup Overlay on top of scene
@@ -1040,12 +1050,194 @@ void Window::set_focused_view(View* view) {
     }
     if (m_focused_view) {
         m_focused_view->on_focus_changed(true);
+        // Auto-scroll any enclosing ScrollView to keep focused view in visible bounds
+        ViewGroup* parent = m_focused_view->get_parent();
+        while (parent) {
+            if (auto sv = dynamic_cast<ScrollView*>(parent)) {
+                sv->scroll_to_view(m_focused_view);
+            }
+            parent = parent->get_parent();
+        }
     }
     schedule_redraw();
 }
 
 void Window::clear_focus() {
     set_focused_view(nullptr);
+}
+
+void Window::notify_view_destroyed(View* view) {
+    if (m_focused_view == view) {
+        m_focused_view = nullptr;
+    }
+}
+
+bool Window::focus_next() {
+    std::vector<View*> focusable;
+    if (auto group = std::dynamic_pointer_cast<ViewGroup>(m_root_view)) {
+        group->collect_focusable_views(focusable);
+    } else if (m_root_view && m_root_view->is_focusable()) {
+        focusable.push_back(m_root_view.get());
+    }
+
+    if (focusable.empty()) return false;
+
+    if (!m_focused_view) {
+        set_focused_view(focusable.front());
+        return true;
+    }
+
+    auto it = std::find(focusable.begin(), focusable.end(), m_focused_view);
+    if (it == focusable.end()) {
+        set_focused_view(focusable.front());
+        return true;
+    }
+
+    size_t idx = std::distance(focusable.begin(), it);
+    size_t next_idx = (idx + 1) % focusable.size();
+    set_focused_view(focusable[next_idx]);
+    return true;
+}
+
+bool Window::focus_prev() {
+    std::vector<View*> focusable;
+    if (auto group = std::dynamic_pointer_cast<ViewGroup>(m_root_view)) {
+        group->collect_focusable_views(focusable);
+    } else if (m_root_view && m_root_view->is_focusable()) {
+        focusable.push_back(m_root_view.get());
+    }
+
+    if (focusable.empty()) return false;
+
+    if (!m_focused_view) {
+        set_focused_view(focusable.back());
+        return true;
+    }
+
+    auto it = std::find(focusable.begin(), focusable.end(), m_focused_view);
+    if (it == focusable.end()) {
+        set_focused_view(focusable.back());
+        return true;
+    }
+
+    size_t idx = std::distance(focusable.begin(), it);
+    size_t prev_idx = (idx == 0) ? (focusable.size() - 1) : (idx - 1);
+    set_focused_view(focusable[prev_idx]);
+    return true;
+}
+
+bool Window::focus_direction(FocusDirection dir) {
+    if (dir == FocusDirection::Next) return focus_next();
+    if (dir == FocusDirection::Previous) return focus_prev();
+
+    if (!m_focused_view) return focus_next();
+
+    // Check if focused view is inside a ScrollView container
+    ScrollView* enclosing_sv = nullptr;
+    ViewGroup* p = m_focused_view->get_parent();
+    while (p) {
+        if (auto sv = dynamic_cast<ScrollView*>(p)) {
+            enclosing_sv = sv;
+            break;
+        }
+        p = p->get_parent();
+    }
+
+    std::vector<View*> focusable;
+    if (enclosing_sv) {
+        // Confine spatial navigation strictly to the ScrollView container
+        enclosing_sv->collect_focusable_views(focusable);
+    } else if (auto group = std::dynamic_pointer_cast<ViewGroup>(m_root_view)) {
+        group->collect_focusable_views(focusable);
+    } else if (m_root_view && m_root_view->is_focusable()) {
+        focusable.push_back(m_root_view.get());
+    }
+
+    if (focusable.size() <= 1) {
+        if (enclosing_sv) {
+            if (dir == FocusDirection::Up && enclosing_sv->get_scroll_y() > 0.0) {
+                enclosing_sv->set_scroll_y(0.0);
+                schedule_redraw();
+                return true;
+            } else if (dir == FocusDirection::Down && enclosing_sv->get_scroll_y() < enclosing_sv->get_max_scroll()) {
+                enclosing_sv->set_scroll_y(enclosing_sv->get_max_scroll());
+                schedule_redraw();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    Rect cur = m_focused_view->get_bounds();
+    double cur_cx = cur.x + cur.width / 2.0;
+    double cur_cy = cur.y + cur.height / 2.0;
+
+    View* best_match = nullptr;
+    double min_score = 1e9;
+
+    for (View* candidate : focusable) {
+        if (candidate == m_focused_view) continue;
+        Rect cb = candidate->get_bounds();
+        double cb_cx = cb.x + cb.width / 2.0;
+        double cb_cy = cb.y + cb.height / 2.0;
+
+        double primary_delta = 0.0;
+        double secondary_delta = 0.0;
+        bool valid = false;
+
+        switch (dir) {
+            case FocusDirection::Up:
+                primary_delta = cur_cy - cb_cy;
+                secondary_delta = std::abs(cb_cx - cur_cx);
+                valid = (primary_delta > 0.0) || (cb.y + cb.height <= cur.y + 4);
+                break;
+            case FocusDirection::Down:
+                primary_delta = cb_cy - cur_cy;
+                secondary_delta = std::abs(cb_cx - cur_cx);
+                valid = (primary_delta > 0.0) || (cb.y >= cur.y + cur.height - 4);
+                break;
+            case FocusDirection::Left:
+                primary_delta = cur_cx - cb_cx;
+                secondary_delta = std::abs(cb_cy - cur_cy);
+                valid = (primary_delta > 0.0) || (cb.x + cb.width <= cur.x + 4);
+                break;
+            case FocusDirection::Right:
+                primary_delta = cb_cx - cur_cx;
+                secondary_delta = std::abs(cb_cy - cur_cy);
+                valid = (primary_delta > 0.0) || (cb.x >= cur.x + cur.width - 4);
+                break;
+            default:
+                break;
+        }
+
+        if (valid) {
+            double score = (8.0 * primary_delta) + secondary_delta;
+            if (score < min_score) {
+                min_score = score;
+                best_match = candidate;
+            }
+        }
+    }
+
+    if (best_match) {
+        set_focused_view(best_match);
+        return true;
+    }
+
+    // No further focusable candidate in this direction inside the ScrollView
+    if (enclosing_sv) {
+        if (dir == FocusDirection::Up && enclosing_sv->get_scroll_y() > 0.0) {
+            enclosing_sv->set_scroll_y(0.0);
+            schedule_redraw();
+            return true;
+        } else if (dir == FocusDirection::Down && enclosing_sv->get_scroll_y() < enclosing_sv->get_max_scroll()) {
+            enclosing_sv->set_scroll_y(enclosing_sv->get_max_scroll());
+            schedule_redraw();
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void Window::dispatch_key_event(const KeyPressEvent& event) {
@@ -1068,15 +1260,45 @@ void Window::dispatch_key_event(const KeyPressEvent& event) {
         return;
     }
 
-    if (m_on_key) {
-        m_on_key(event);
-    }
-
     if (m_focused_view) {
         if (m_focused_view->on_key(event)) {
             schedule_redraw();
             return;
         }
+
+        // When a view has focus and did not consume directional arrows, perform spatial navigation
+        if (event.pressed) {
+            if (!event.has_shift()) {
+                if (event.keysym == XKB_KEY_Down || event.keysym == XKB_KEY_KP_Down) {
+                    if (focus_direction(FocusDirection::Down)) {
+                        schedule_redraw();
+                        return;
+                    }
+                } else if (event.keysym == XKB_KEY_Up || event.keysym == XKB_KEY_KP_Up) {
+                    if (focus_direction(FocusDirection::Up)) {
+                        schedule_redraw();
+                        return;
+                    }
+                }
+            } else {
+                // Shift + Left / Right for horizontal spatial navigation between controls on the same row
+                if (event.keysym == XKB_KEY_Left || event.keysym == XKB_KEY_KP_Left) {
+                    if (focus_direction(FocusDirection::Left)) {
+                        schedule_redraw();
+                        return;
+                    }
+                } else if (event.keysym == XKB_KEY_Right || event.keysym == XKB_KEY_KP_Right) {
+                    if (focus_direction(FocusDirection::Right)) {
+                        schedule_redraw();
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    if (m_on_key) {
+        m_on_key(event);
     }
 
     if (m_root_view) {

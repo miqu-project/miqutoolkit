@@ -212,6 +212,10 @@ void EditText::draw(cairo_t* cr, const Rect& bounds) {
 
     g_object_unref(layout);
     cairo_restore(cr);
+
+    if (has_focus() && should_draw_focus_ring()) {
+        draw_focus_ring(cr, bounds);
+    }
 }
 
 bool EditText::on_key(const KeyPressEvent& event) {

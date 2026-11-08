@@ -8,7 +8,7 @@ namespace miqu {
 
 class EditText : public View {
 public:
-    EditText() = default;
+    EditText() { m_focusable = true; }
 
     void set_text(std::string text);
     const std::string& get_text() const { return m_text; }
