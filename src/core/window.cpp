@@ -1175,43 +1175,74 @@ bool Window::focus_direction(FocusDirection dir) {
     View* best_match = nullptr;
     double min_score = 1e9;
 
-    for (View* candidate : focusable) {
-        if (candidate == m_focused_view) continue;
-        Rect cb = candidate->get_bounds();
-        double cb_cx = cb.x + cb.width / 2.0;
-        double cb_cy = cb.y + cb.height / 2.0;
+    // For horizontal navigation (Left/Right), check for sibling candidates on the same row band first
+    if (dir == FocusDirection::Left || dir == FocusDirection::Right) {
+        bool dir_right = (dir == FocusDirection::Right);
 
-        double primary_delta = 0.0;
-        double secondary_delta = 0.0;
-        bool valid = false;
+        // 1. First pass: look for candidates in the requested direction on the same row band
+        for (View* candidate : focusable) {
+            if (candidate == m_focused_view) continue;
+            Rect cb = candidate->get_bounds();
+            double cb_cx = cb.x + cb.width / 2.0;
+            double cb_cy = cb.y + cb.height / 2.0;
 
-        switch (dir) {
-            case FocusDirection::Up:
-                primary_delta = cur_cy - cb_cy;
-                secondary_delta = std::abs(cb_cx - cur_cx);
-                valid = (primary_delta > 0.0) || (cb.y + cb.height <= cur.y + 4);
-                break;
-            case FocusDirection::Down:
-                primary_delta = cb_cy - cur_cy;
-                secondary_delta = std::abs(cb_cx - cur_cx);
-                valid = (primary_delta > 0.0) || (cb.y >= cur.y + cur.height - 4);
-                break;
-            case FocusDirection::Left:
-                primary_delta = cur_cx - cb_cx;
-                secondary_delta = std::abs(cb_cy - cur_cy);
-                valid = (primary_delta > 0.0) || (cb.x + cb.width <= cur.x + 4);
-                break;
-            case FocusDirection::Right:
-                primary_delta = cb_cx - cur_cx;
-                secondary_delta = std::abs(cb_cy - cur_cy);
-                valid = (primary_delta > 0.0) || (cb.x >= cur.x + cur.width - 4);
-                break;
-            default:
-                break;
+            bool shares_row = (cur.y < cb.y + cb.height) && (cur.y + cur.height > cb.y);
+            if (!shares_row) continue;
+
+            if (dir_right ? (cb_cx > cur_cx) : (cb_cx < cur_cx)) {
+                double primary_dist = dir_right ? (cb.x - (cur.x + cur.width)) : (cur.x - (cb.x + cb.width));
+                double score = std::max(0.0, primary_dist) + 4.0 * std::abs(cb_cy - cur_cy);
+                if (score < min_score) {
+                    min_score = score;
+                    best_match = candidate;
+                }
+            }
         }
 
-        if (valid) {
-            double score = (8.0 * primary_delta) + secondary_delta;
+        // 2. Wrap around on the same row band if reached the boundary (e.g. from Uninstall -> Open)
+        if (!best_match) {
+            View* wrap_target = nullptr;
+            for (View* candidate : focusable) {
+                if (candidate == m_focused_view) continue;
+                Rect cb = candidate->get_bounds();
+                bool shares_row = (cur.y < cb.y + cb.height) && (cur.y + cur.height > cb.y);
+                if (!shares_row) continue;
+
+                if (dir_right) {
+                    // Wrap to leftmost element on this row
+                    if (!wrap_target || cb.x < wrap_target->get_bounds().x) {
+                        wrap_target = candidate;
+                    }
+                } else {
+                    // Wrap to rightmost element on this row
+                    if (!wrap_target || cb.x > wrap_target->get_bounds().x) {
+                        wrap_target = candidate;
+                    }
+                }
+            }
+            if (wrap_target) {
+                best_match = wrap_target;
+            }
+        }
+    } else {
+        // Vertical Navigation (Up / Down)
+        bool dir_down = (dir == FocusDirection::Down);
+        for (View* candidate : focusable) {
+            if (candidate == m_focused_view) continue;
+            Rect cb = candidate->get_bounds();
+            double cb_cx = cb.x + cb.width / 2.0;
+            double cb_cy = cb.y + cb.height / 2.0;
+
+            double v_dist = dir_down ? (cb.y - (cur.y + cur.height)) : (cur.y - (cb.y + cb.height));
+            double cy_delta = dir_down ? (cb_cy - cur_cy) : (cur_cy - cb_cy);
+
+            if (cy_delta <= 0.0 && v_dist < 0.0) continue;
+
+            double primary_dist = (v_dist >= 0.0) ? v_dist : (cy_delta * 0.5);
+            double h_dist = std::abs(cb_cx - cur_cx);
+
+            // Vertical distance is the dominant factor (8x weight), horizontal offset is tiebreaker
+            double score = (8.0 * primary_dist) + h_dist;
             if (score < min_score) {
                 min_score = score;
                 best_match = candidate;
@@ -1281,13 +1312,17 @@ void Window::dispatch_key_event(const KeyPressEvent& event) {
                     }
                 }
             } else {
-                // Shift + Left / Right for horizontal spatial navigation between controls on the same row
-                if (event.keysym == XKB_KEY_Left || event.keysym == XKB_KEY_KP_Left) {
+                // Shift + Left / Right / H / L for horizontal spatial navigation between controls on the same row
+                bool is_left = (event.keysym == XKB_KEY_Left || event.keysym == XKB_KEY_KP_Left ||
+                                event.keysym == XKB_KEY_h || event.keysym == XKB_KEY_H);
+                bool is_right = (event.keysym == XKB_KEY_Right || event.keysym == XKB_KEY_KP_Right ||
+                                 event.keysym == XKB_KEY_l || event.keysym == XKB_KEY_L);
+                if (is_left) {
                     if (focus_direction(FocusDirection::Left)) {
                         schedule_redraw();
                         return;
                     }
-                } else if (event.keysym == XKB_KEY_Right || event.keysym == XKB_KEY_KP_Right) {
+                } else if (is_right) {
                     if (focus_direction(FocusDirection::Right)) {
                         schedule_redraw();
                         return;
