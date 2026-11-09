@@ -188,7 +188,7 @@ bool Switch::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, c
 
 bool Switch::on_key(const KeyPressEvent& event) {
     if (!is_visible() || !is_enabled() || !has_focus()) return false;
-    if (event.pressed && event.keysym == XKB_KEY_space) {
+    if (event.pressed && (event.keysym == XKB_KEY_space || event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter)) {
         auto self = shared_from_this();
         set_checked(!m_checked);
         request_redraw();

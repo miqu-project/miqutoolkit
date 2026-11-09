@@ -240,7 +240,7 @@ public:
                 request_redraw();
                 return true;
             }
-        } else if (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space) {
+        } else if (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter) {
             if (m_hovered_index >= 0 && m_hovered_index < static_cast<int>(menu_sp->get_items().size())) {
                 if (menu_sp->get_items()[m_hovered_index].is_actionable()) {
                     menu_sp->handle_item_triggered(m_hovered_index);

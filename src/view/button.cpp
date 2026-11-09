@@ -306,7 +306,7 @@ void Button::draw_focus_ring(cairo_t* cr, const Rect& bounds) {
 
 bool Button::on_key(const KeyPressEvent& event) {
     if (!is_visible() || !is_enabled() || !has_focus()) return false;
-    if (event.pressed && (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space)) {
+    if (event.pressed && (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter)) {
         if (m_on_click) {
             auto self = shared_from_this();
             m_pressed = true;
