@@ -420,6 +420,8 @@ const struct wl_touch_listener Window::s_touch_listener = {
     },
     .up = [](void* data, struct wl_touch*, uint32_t serial, uint32_t time, int32_t id) {
         auto* self = static_cast<Window*>(data);
+        if (!self) return;
+        auto keep_alive = self->shared_from_this();
         TouchEvent event{ id, self->m_last_x, self->m_last_y, TouchPhase::Up, time };
 
         if (self->m_popup_view) {
@@ -450,6 +452,8 @@ const struct wl_touch_listener Window::s_touch_listener = {
     },
     .motion = [](void* data, struct wl_touch*, uint32_t time, int32_t id, wl_fixed_t x, wl_fixed_t y) {
         auto* self = static_cast<Window*>(data);
+        if (!self) return;
+        auto keep_alive = self->shared_from_this();
         double tx = wl_fixed_to_double(x);
         double ty = wl_fixed_to_double(y);
 
@@ -483,6 +487,8 @@ const struct wl_touch_listener Window::s_touch_listener = {
     .frame = [](void*, struct wl_touch*) {},
     .cancel = [](void* data, struct wl_touch*) {
         auto* self = static_cast<Window*>(data);
+        if (!self) return;
+        auto keep_alive = self->shared_from_this();
         TouchEvent event{ self->m_primary_touch_id, self->m_last_x, self->m_last_y, TouchPhase::Cancel, 0 };
 
         if (self->m_popup_view) {

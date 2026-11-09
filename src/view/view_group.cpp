@@ -258,6 +258,7 @@ bool ViewGroup::on_mouse_move(int lx, int ly, const Rect& bounds) {
 
 bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed, const Rect& bounds) {
     if (!is_visible()) return false;
+    auto self = shared_from_this();
 
     if (!pressed && m_mouse_target) {
         Rect target_bounds = m_mouse_target_bounds;
@@ -322,7 +323,8 @@ bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed
             return true;
         } else if (m_pressed) {
             m_pressed = false;
-            m_on_click();
+            auto cb = m_on_click;
+            cb();
             return true;
         }
     }
@@ -342,14 +344,15 @@ bool ViewGroup::on_mouse_button(int lx, int ly, MouseButton button, bool pressed
 
 bool ViewGroup::on_key(const KeyPressEvent& event) {
     if (!is_visible() || !is_enabled()) return false;
+    auto self = shared_from_this();
 
     // If this ViewGroup itself has focus and a click listener, handle Enter / Space
     if (has_focus() && event.pressed &&
         (event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter || event.keysym == XKB_KEY_space)) {
         if (m_on_click) {
-            auto self = shared_from_this();
+            auto cb = m_on_click;
             request_redraw();
-            m_on_click();
+            cb();
             return true;
         }
     }
@@ -379,6 +382,7 @@ bool ViewGroup::on_scroll(double delta) {
 
 bool ViewGroup::on_touch(const TouchEvent& event, const Rect& bounds) {
     if (!is_visible()) return false;
+    auto self = shared_from_this();
 
     if (event.phase == TouchPhase::Down) {
         m_touch_target = nullptr;
@@ -409,18 +413,20 @@ bool ViewGroup::on_touch(const TouchEvent& event, const Rect& bounds) {
     }
 
     if (m_touch_target) {
+        auto target = m_touch_target;
+        if (event.phase == TouchPhase::Up || event.phase == TouchPhase::Cancel) {
+            m_touch_target = nullptr;
+        }
+
         Rect target_bounds = m_touch_target_bounds;
         for (const auto& entry : m_child_entries) {
-            if (entry.view == m_touch_target) {
+            if (entry.view == target) {
                 target_bounds = entry.allocated_bounds;
                 break;
             }
         }
 
-        bool handled = m_touch_target->on_touch(event, target_bounds);
-        if (event.phase == TouchPhase::Up || event.phase == TouchPhase::Cancel) {
-            m_touch_target = nullptr;
-        }
+        bool handled = target->on_touch(event, target_bounds);
         return handled;
     }
 

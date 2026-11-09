@@ -52,7 +52,8 @@ public:
             }
             request_redraw();
             if (m_on_click) {
-                m_on_click();
+                auto cb = m_on_click;
+                cb();
                 return true;
             }
         }
@@ -63,8 +64,9 @@ public:
         if (event.pressed && (event.keysym == XKB_KEY_space || event.keysym == XKB_KEY_Return || event.keysym == XKB_KEY_KP_Enter)) {
             if (m_on_click) {
                 auto self = shared_from_this();
+                auto cb = m_on_click;
                 request_redraw();
-                m_on_click();
+                cb();
                 return true;
             }
         }
@@ -73,6 +75,7 @@ public:
     virtual bool on_scroll(double delta) { (void)delta; return false; }
     virtual bool on_touch(const TouchEvent& event, const Rect& bounds) {
         if (!is_visible() || !is_enabled()) return false;
+        auto self = shared_from_this();
         int lx = static_cast<int>(event.x);
         int ly = static_cast<int>(event.y);
         switch (event.phase) {

@@ -207,6 +207,7 @@ bool ScrollView::on_scroll(double delta) {
 
 bool ScrollView::on_touch(const TouchEvent& event, const Rect& bounds) {
     if (!is_visible()) return false;
+    auto self = shared_from_this();
 
     Rect content_rect = get_content_rect(bounds);
 
@@ -223,7 +224,9 @@ bool ScrollView::on_touch(const TouchEvent& event, const Rect& bounds) {
         m_child_touch_target = false;
 
         if (m_content && m_content->is_visible() && !m_child_entries.empty()) {
-            m_child_touch_target = m_content->on_touch(event, m_child_entries[0].allocated_bounds);
+            auto content = m_content;
+            Rect child_b = m_child_entries[0].allocated_bounds;
+            m_child_touch_target = content->on_touch(event, child_b);
         }
         return true;
     }
@@ -244,12 +247,15 @@ bool ScrollView::on_touch(const TouchEvent& event, const Rect& bounds) {
                 if (m_child_touch_target && m_content && m_content->is_visible() && !m_child_entries.empty()) {
                     TouchEvent cancel_event = event;
                     cancel_event.phase = TouchPhase::Cancel;
-                    m_content->on_touch(cancel_event, m_child_entries[0].allocated_bounds);
+                    auto content = m_content;
+                    Rect child_b = m_child_entries[0].allocated_bounds;
                     m_child_touch_target = false;
+                    content->on_touch(cancel_event, child_b);
                 }
             } else if (m_child_touch_target && m_content && m_content->is_visible() && !m_child_entries.empty()) {
-                m_content->on_touch(event, m_child_entries[0].allocated_bounds);
-                return true;
+                auto content = m_content;
+                Rect child_b = m_child_entries[0].allocated_bounds;
+                return content->on_touch(event, child_b);
             }
         }
 
@@ -274,8 +280,10 @@ bool ScrollView::on_touch(const TouchEvent& event, const Rect& bounds) {
 
         m_touch_scrolling = false;
         if (m_child_touch_target && m_content && m_content->is_visible() && !m_child_entries.empty()) {
-            m_content->on_touch(event, m_child_entries[0].allocated_bounds);
+            auto content = m_content;
+            Rect child_b = m_child_entries[0].allocated_bounds;
             m_child_touch_target = false;
+            content->on_touch(event, child_b);
         }
         return true;
     }
@@ -284,8 +292,10 @@ bool ScrollView::on_touch(const TouchEvent& event, const Rect& bounds) {
         m_touch_id = -1;
         m_touch_scrolling = false;
         if (m_child_touch_target && m_content && m_content->is_visible() && !m_child_entries.empty()) {
-            m_content->on_touch(event, m_child_entries[0].allocated_bounds);
+            auto content = m_content;
+            Rect child_b = m_child_entries[0].allocated_bounds;
             m_child_touch_target = false;
+            content->on_touch(event, child_b);
         }
         return true;
     }
