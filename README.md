@@ -13,7 +13,7 @@
 
 ---
 
-`miqutoolkit` is the foundational UI framework powering all desktop applications in the **Miqu Desktop Ecosystem** (`miqubar`, `miqudesk`, `miqumusic`, `miqulauncher`, `miqunotify`, `miqutheme`, `miqusecure`, etc.). It abstracts Cairo vector drawing, Pango typography, and Wayland surface protocols into a clean, declarative C++ widget system.
+`miqutoolkit` is the foundational UI framework powering all desktop applications in the **Miqu Desktop Ecosystem** (`miqubar`, `miqudesk`, `miqucontrolpanel`, `miqufiles`, `miqumusic`, `miqulauncher`, `miqunotify`, `miqutheme`, etc.). It abstracts Cairo vector drawing, Pango typography, and Wayland surface protocols into a clean, declarative C++ widget system.
 
 ---
 
